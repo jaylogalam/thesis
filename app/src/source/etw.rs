@@ -15,10 +15,10 @@ use ferrisetw::EventRecord;
 use ferrisetw::parser::Parser;
 use ferrisetw::provider::Provider;
 use ferrisetw::schema_locator::SchemaLocator;
-use ferrisetw::trace::{UserTrace, TraceTrait};
+use ferrisetw::trace::UserTrace;
 use std::collections::HashMap;
 use std::sync::mpsc::{TrySendError, sync_channel};
-use std::sync::{Arc, Mutex, atomic::{AtomicU64, Ordering}};
+use std::sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU64, Ordering}};
 use std::time::{Duration, Instant};
 
 const KERNEL_FILE_GUID: &str = "edd08927-9cc4-4e65-b970-c2560fb5c289";
@@ -93,7 +93,7 @@ impl EventSource for EtwSource {
                 let bytes: Option<u64> = if op == Operation::Write { p.try_parse::<u32>("IoSize").ok().map(u64::from) } else { None };
                 let ev = RawEvent {
                     event_id: uuid::Uuid::new_v4().to_string(),
-                    ts_utc: filetime_to_utc(rec.timestamp()),
+                    ts_utc: filetime_to_utc(rec.raw_timestamp()),
                     pid: rec.process_id(),
                     proc_start_utc: None, // resolved on the consumer side
                     proc_name: None,
