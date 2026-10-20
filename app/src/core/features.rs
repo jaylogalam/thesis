@@ -1,8 +1,10 @@
 //! Feature extraction: turns the event stream into per-process features.
 
 use std::collections::HashMap;
+use std::io;
 
 use super::event::{Event, EventKind, FileOp};
+use super::framework::Processor;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct FileCounts {
@@ -39,7 +41,20 @@ impl FileCountExtractor {
         Self::default()
     }
 
-    pub fn process(&mut self, ev: &Event) {
+    /// Every known running process, sorted by pid.
+    pub fn snapshot(&self) -> Vec<ProcessFileCounts> {
+        let mut v: Vec<_> = self
+            .procs
+            .iter()
+            .map(|(&pid, e)| ProcessFileCounts { pid, name: e.name.clone(), counts: e.counts })
+            .collect();
+        v.sort_unstable_by_key(|p| p.pid);
+        v
+    }
+}
+
+impl Processor for FileCountExtractor {
+    fn on_event(&mut self, ev: &Event, _out: &mut Vec<Event>) -> io::Result<()> {
         match &ev.kind {
             EventKind::ProcessStart { name, start_ticks, .. } => {
                 let e = self.procs.entry(ev.pid).or_insert_with(|| Entry {
@@ -75,17 +90,7 @@ impl FileCountExtractor {
                 }
             }
         }
-    }
-
-    /// Every known running process, sorted by pid.
-    pub fn snapshot(&self) -> Vec<ProcessFileCounts> {
-        let mut v: Vec<_> = self
-            .procs
-            .iter()
-            .map(|(&pid, e)| ProcessFileCounts { pid, name: e.name.clone(), counts: e.counts })
-            .collect();
-        v.sort_unstable_by_key(|p| p.pid);
-        v
+        Ok(())
     }
 }
 
@@ -107,10 +112,10 @@ mod tests {
     #[test]
     fn counts_each_op_and_adopts_early_events() {
         let mut x = FileCountExtractor::new();
-        x.process(&file(1, FileOp::Open)); // before the process was scanned
-        x.process(&start(1, 100));
+        x.on_event(&file(1, FileOp::Open), &mut Vec::new()).unwrap(); // before the process was scanned
+        x.on_event(&start(1, 100), &mut Vec::new()).unwrap();
         for op in [FileOp::Create, FileOp::Read, FileOp::Write, FileOp::Rename, FileOp::Delete] {
-            x.process(&file(1, op));
+            x.on_event(&file(1, op), &mut Vec::new()).unwrap();
         }
         let s = x.snapshot();
         assert_eq!(s.len(), 1);
@@ -131,11 +136,11 @@ mod tests {
     #[test]
     fn exit_removes_and_pid_reuse_resets() {
         let mut x = FileCountExtractor::new();
-        x.process(&start(1, 100));
-        x.process(&file(1, FileOp::Write));
-        x.process(&start(1, 200)); // same pid, new start time
+        x.on_event(&start(1, 100), &mut Vec::new()).unwrap();
+        x.on_event(&file(1, FileOp::Write), &mut Vec::new()).unwrap();
+        x.on_event(&start(1, 200), &mut Vec::new()).unwrap(); // same pid, new start time
         assert_eq!(x.snapshot()[0].counts, FileCounts::default());
-        x.process(&ev(1, EventKind::ProcessExit));
+        x.on_event(&ev(1, EventKind::ProcessExit), &mut Vec::new()).unwrap();
         assert!(x.snapshot().is_empty());
     }
 }

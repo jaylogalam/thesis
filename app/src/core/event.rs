@@ -3,7 +3,9 @@
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FileOp {
     Create,
     Open,
@@ -13,11 +15,13 @@ pub enum FileOp {
     Delete,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum EventKind {
     /// A process was first seen (`e0` of its event stream).
     ProcessStart {
         name: String,
+        #[serde(serialize_with = "lossy")]
         exe: Option<PathBuf>,
         /// Process start time in clock ticks since boot; distinguishes a reused pid.
         start_ticks: u64,
@@ -25,13 +29,22 @@ pub enum EventKind {
     ProcessExit,
     /// `path` is None when the kernel could not resolve it (e.g. already deleted).
     /// For renames it is the old location.
-    File { op: FileOp, path: Option<PathBuf> },
+    File {
+        op: FileOp,
+        #[serde(serialize_with = "lossy")]
+        path: Option<PathBuf>,
+    },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Event {
     /// When the sensor observed the event (the kernel does not timestamp them).
     pub timestamp: SystemTime,
     pub pid: u32,
     pub kind: EventKind,
+}
+
+/// Linux paths may be non-UTF-8, which JSON cannot hold: replace invalid bytes with U+FFFD.
+fn lossy<S: serde::Serializer>(p: &Option<PathBuf>, s: S) -> Result<S::Ok, S::Error> {
+    p.as_ref().map(|p| p.to_string_lossy()).serialize(s)
 }

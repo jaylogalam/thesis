@@ -4,6 +4,7 @@ use super::event::Event;
 
 pub mod file;
 pub mod process;
+pub mod replay;
 
 /// An OS-specific source of raw events.
 pub trait Sensor {

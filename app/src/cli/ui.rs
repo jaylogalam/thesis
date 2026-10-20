@@ -64,10 +64,11 @@ pub fn draw(f: &mut Frame, app: &App, table: &mut TableState) {
         Line::from(vec![
             Span::styled(format!("{} v{}", super::NAME, super::VERSION), bold),
             Span::raw(format!(
-                "   processes: {}   events: {}   up: {}s",
+                "   processes: {}   events: {}   up: {}s   {}",
                 app.rows.len(),
                 app.events_total,
-                app.started.elapsed().as_secs()
+                app.started.elapsed().as_secs(),
+                app.source
             )),
         ]),
         head,
@@ -148,6 +149,7 @@ mod tests {
     use super::*;
     use crate::cli::app::total;
     use crate::core::event::{Event, EventKind};
+    use crate::core::framework::dispatch;
     use ratatui::{backend::TestBackend, Terminal};
     use std::path::PathBuf;
 
@@ -157,13 +159,15 @@ mod tests {
 
     #[test]
     fn renders_table_and_event_log() {
-        let mut app = App::new();
-        app.tick(vec![
+        let mut app = App::new("live".into());
+        let events = vec![
             ev(10, EventKind::ProcessStart { name: "editor".into(), exe: None, start_ticks: 1 }),
             ev(11, EventKind::ProcessStart { name: "idle-proc".into(), exe: None, start_ticks: 2 }),
             ev(10, EventKind::File { op: FileOp::Write, path: Some(PathBuf::from("/home/u/notes.txt")) }),
             ev(10, EventKind::File { op: FileOp::Delete, path: None }),
-        ]);
+        ];
+        dispatch(events, &mut [&mut app]).unwrap();
+        app.refresh();
         let mut term = Terminal::new(TestBackend::new(100, 24)).unwrap();
         term.draw(|f| draw(f, &app, &mut TableState::default())).unwrap();
         let out = term.backend().to_string();

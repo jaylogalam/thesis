@@ -1,10 +1,12 @@
 //! UI state: process table rows and the recent-events log.
 
 use std::collections::{HashMap, VecDeque};
+use std::io;
 use std::time::{Instant, SystemTime};
 
 use crate::core::event::{Event, EventKind, FileOp};
 use crate::core::features::{FileCountExtractor, FileCounts};
+use crate::core::framework::Processor;
 
 const LOG_MAX: usize = 1000;
 
@@ -39,6 +41,8 @@ pub struct App {
     pub show_idle: bool,
     pub events_total: u64,
     pub started: Instant,
+    /// Where events come from (live, recording, replay), shown in the header.
+    pub source: String,
 }
 
 pub fn total(c: &FileCounts) -> u64 {
@@ -51,7 +55,7 @@ pub fn total(c: &FileCounts) -> u64 {
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new(source: String) -> Self {
         Self {
             extractor: FileCountExtractor::new(),
             prev_totals: HashMap::new(),
@@ -61,17 +65,12 @@ impl App {
             show_idle: false,
             events_total: 0,
             started: Instant::now(),
+            source,
         }
     }
 
-    /// Feed one batch of sensor events and rebuild the table.
-    pub fn tick(&mut self, events: Vec<Event>) {
-        for ev in &events {
-            self.extractor.process(ev);
-            self.events_total += 1;
-            self.push_log(ev);
-        }
-
+    /// Rebuild the table from the events received so far.
+    pub fn refresh(&mut self) {
         let snapshot = self.extractor.snapshot();
         let mut totals = HashMap::with_capacity(snapshot.len());
         self.rows = snapshot
@@ -116,5 +115,14 @@ impl App {
         if matches!(ev.kind, EventKind::ProcessExit) {
             self.names.remove(&ev.pid);
         }
+    }
+}
+
+impl Processor for App {
+    fn on_event(&mut self, ev: &Event, out: &mut Vec<Event>) -> io::Result<()> {
+        self.extractor.on_event(ev, out)?;
+        self.events_total += 1;
+        self.push_log(ev);
+        Ok(())
     }
 }
