@@ -1,49 +1,34 @@
 //! Terminal UI for the app.
 
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::io;
+use std::time::{Duration, Instant};
 
-use crate::core::sensors::file::{FileSensor, ProcessFileCounts};
+use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use ratatui::widgets::TableState;
+
+use crate::core::sensors::{Sensor, file::FileSensor, process::ProcessSensor};
+use app::App;
 
 const NAME: &str = env!("CARGO_PKG_NAME");
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-fn banner() {
-    println!("{NAME} v{VERSION}");
-}
+const TICK: Duration = Duration::from_secs(1);
 
 fn usage() {
+    println!("{NAME} v{VERSION}");
+    println!();
     println!("Usage: {NAME} [OPTIONS]");
     println!();
-    println!("Logs file activity of every process, once per second. Needs root.");
-    println!("Every running process is listed each second; counts are cumulative.");
+    println!("Live view of file activity per process (create, open, read, write,");
+    println!("rename, delete). Needs root.");
+    println!();
+    println!("Keys:");
+    println!("  q, Ctrl-C  Quit");
+    println!("  Up/Down    Select a process row");
+    println!("  a          Show/hide processes without file activity");
     println!();
     println!("Options:");
     println!("  -h, --help     Show this help");
     println!("  -V, --version  Show version");
-}
-
-/// One log line per process, timestamped in UTC.
-fn log_line(p: &ProcessFileCounts) {
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs())
-        % 86_400;
-    let c = &p.counts;
-    println!(
-        "[{:02}:{:02}:{:02}] pid={} name={} file_create_count={} file_open_count={} \
-         file_read_count={} file_write_count={} file_rename_count={} file_delete_count={}",
-        secs / 3600,
-        secs / 60 % 60,
-        secs % 60,
-        p.pid,
-        p.name,
-        c.file_create_count,
-        c.file_open_count,
-        c.file_read_count,
-        c.file_write_count,
-        c.file_rename_count,
-        c.file_delete_count,
-    );
 }
 
 /// Entry point for the CLI. Returns the process exit code.
@@ -51,13 +36,11 @@ pub fn run(args: impl Iterator<Item = String>) -> i32 {
     for arg in args {
         match arg.as_str() {
             "-h" | "--help" => {
-                banner();
-                println!();
                 usage();
                 return 0;
             }
             "-V" | "--version" => {
-                banner();
+                println!("{NAME} v{VERSION}");
                 return 0;
             }
             other => {
@@ -68,23 +51,63 @@ pub fn run(args: impl Iterator<Item = String>) -> i32 {
         }
     }
 
-    let mut sensor = match FileSensor::new() {
+    // Fail before taking over the terminal, so the error stays readable.
+    let mut file_sensor = match FileSensor::new() {
         Ok(s) => s,
         Err(e) => {
             eprintln!("error: {e}");
             return 1;
         }
     };
-    banner();
-    println!("logging all processes (Ctrl-C to quit)");
+    let mut process_sensor = ProcessSensor::new();
+
+    let mut terminal = ratatui::init();
+    let result = event_loop(&mut terminal, &mut process_sensor, &mut file_sensor);
+    ratatui::restore();
+    match result {
+        Ok(()) => 0,
+        Err(e) => {
+            eprintln!("error: {e}");
+            1
+        }
+    }
+}
+
+fn event_loop(
+    terminal: &mut ratatui::DefaultTerminal,
+    process_sensor: &mut ProcessSensor,
+    file_sensor: &mut FileSensor,
+) -> io::Result<()> {
+    let mut app = App::new();
+    let mut table = TableState::default();
+    let mut next_tick = Instant::now();
     loop {
-        match sensor.poll() {
-            Ok(procs) => procs.iter().for_each(log_line),
-            Err(e) => {
-                eprintln!("error: {e}");
-                return 1;
+        if Instant::now() >= next_tick {
+            // Process events first so a process is known before its file events.
+            let mut events = process_sensor.poll()?;
+            events.extend(file_sensor.poll()?);
+            app.tick(events);
+            next_tick = Instant::now() + TICK;
+        }
+        terminal.draw(|f| ui::draw(f, &app, &mut table))?;
+
+        if !event::poll(next_tick.saturating_duration_since(Instant::now()))? {
+            continue;
+        }
+        if let Event::Key(key) = event::read()? {
+            if key.kind != KeyEventKind::Press {
+                continue;
+            }
+            match key.code {
+                KeyCode::Char('q') => return Ok(()),
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    return Ok(());
+                }
+                KeyCode::Char('a') => app.show_idle = !app.show_idle,
+                KeyCode::Down => table.select_next(),
+                KeyCode::Up => table.select_previous(),
+                _ => {}
             }
         }
-        std::thread::sleep(Duration::from_secs(1));
     }
 }
