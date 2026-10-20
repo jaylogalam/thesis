@@ -9,7 +9,7 @@ use ratatui::widgets::TableState;
 
 use crate::core::framework::dispatch;
 use crate::core::framework::recorder::Recorder;
-use crate::core::sensors::{Sensor, file::FileSensor, process::ProcessSensor, replay::ReplaySensor};
+use crate::core::sensors::{FileSensor, ProcessSensor, Sensor, replay::ReplaySensor};
 use app::App;
 
 mod app;
@@ -26,7 +26,7 @@ fn usage() {
     println!("Usage: {NAME} [OPTIONS]");
     println!();
     println!("Live view of file activity per process (create, open, read, write,");
-    println!("rename, delete). Needs root, except with --replay.");
+    println!("rename, delete). Needs root (Linux) or Administrator (Windows), except with --replay.");
     println!();
     println!("Keys:");
     println!("  q, Ctrl-C  Quit");
@@ -37,29 +37,15 @@ fn usage() {
     println!("  --record FILE  Save every event to FILE (JSON Lines; must not exist)");
     println!("                 Default for live runs: {TRACE_DIR}/<local date-time>.jsonl");
     println!("  --no-record    Do not save a trace of a live run");
-    println!("  --replay FILE  Play back a recorded FILE instead of live sensors (no root)");
+    println!("  --replay FILE  Play back a recorded FILE instead of live sensors (no root/admin)");
     println!("  -h, --help     Show this help");
     println!("  -V, --version  Show version");
 }
 
 /// `traces/YYYY-MM-DD_HH-MM-SS.jsonl` in local time.
 fn default_trace_path() -> PathBuf {
-    // SAFETY: time() accepts null; localtime_r fills `tm`, which is fully zeroed first.
-    let tm = unsafe {
-        let now = libc::time(std::ptr::null_mut());
-        let mut tm: libc::tm = std::mem::zeroed();
-        libc::localtime_r(&now, &mut tm);
-        tm
-    };
-    PathBuf::from(TRACE_DIR).join(format!(
-        "{:04}-{:02}-{:02}_{:02}-{:02}-{:02}.jsonl",
-        tm.tm_year + 1900,
-        tm.tm_mon + 1,
-        tm.tm_mday,
-        tm.tm_hour,
-        tm.tm_min,
-        tm.tm_sec
-    ))
+    let stamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S");
+    PathBuf::from(TRACE_DIR).join(format!("{stamp}.jsonl"))
 }
 
 /// Entry point for the CLI. Returns the process exit code.

@@ -37,7 +37,6 @@ mod tests {
     use crate::core::framework::dispatch;
     use crate::core::sensors::{Sensor, replay::ReplaySensor};
     use std::ffi::OsStr;
-    use std::os::unix::ffi::OsStrExt;
     use std::path::PathBuf;
     use std::time::SystemTime;
 
@@ -48,12 +47,21 @@ mod tests {
         let t = SystemTime::now();
         let ev = |kind| Event { timestamp: t, pid: 7, kind };
         let file = |op, p: &OsStr| ev(EventKind::File { op, path: Some(PathBuf::from(p)) });
-        let events = vec![
+        #[allow(unused_mut)] // only modified on unix
+        let mut events = vec![
             ev(EventKind::ProcessStart { name: "p".into(), exe: None, start_ticks: 5 }),
             file(FileOp::Write, OsStr::new("/tmp/x")),
-            file(FileOp::Delete, OsStr::from_bytes(b"/tmp/\xff")),
             ev(EventKind::ProcessExit),
         ];
+        #[allow(unused_mut)]
+        let mut want = events.clone();
+        // A path that is not UTF-8 is saved with U+FFFD in place of the bad byte.
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::OsStrExt;
+            events.insert(2, file(FileOp::Delete, OsStr::from_bytes(b"/tmp/\xff")));
+            want.insert(2, file(FileOp::Delete, OsStr::new("/tmp/\u{FFFD}")));
+        }
 
         let mut rec = Recorder::create(&path).unwrap();
         dispatch(events.clone(), &mut [&mut rec]).unwrap();
@@ -64,8 +72,6 @@ mod tests {
 
         let got = ReplaySensor::open(&path).unwrap().poll().unwrap();
         std::fs::remove_file(&path).unwrap();
-        let mut want = events;
-        want[2] = file(FileOp::Delete, OsStr::new("/tmp/\u{FFFD}"));
         assert_eq!(got, want);
     }
 }

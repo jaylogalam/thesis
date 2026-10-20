@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::io;
 use std::time::SystemTime;
 
-use super::Sensor;
+use crate::core::sensors::Sensor;
 use crate::core::event::{Event, EventKind};
 
 /// Detects processes by scanning /proc on every poll.

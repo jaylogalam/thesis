@@ -14,7 +14,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-use super::Sensor;
+use crate::core::sensors::Sensor;
 use crate::core::event::{Event, EventKind, FileOp};
 
 /// Filesystems worth watching. Pseudo filesystems (proc, sysfs, cgroup...) are skipped.

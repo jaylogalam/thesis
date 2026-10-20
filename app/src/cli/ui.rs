@@ -13,15 +13,7 @@ use crate::core::event::FileOp;
 
 /// HH:MM:SS in local time.
 fn hms(t: SystemTime) -> String {
-    let secs = t
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs()) as libc::time_t;
-    // SAFETY: localtime_r only writes into `tm`; result checked.
-    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
-    if unsafe { libc::localtime_r(&secs, &mut tm) }.is_null() {
-        return "--:--:--".into();
-    }
-    format!("{:02}:{:02}:{:02}", tm.tm_hour, tm.tm_min, tm.tm_sec)
+    chrono::DateTime::<chrono::Local>::from(t).format("%H:%M:%S").to_string()
 }
 
 fn op_style(op: FileOp) -> (&'static str, Color) {
