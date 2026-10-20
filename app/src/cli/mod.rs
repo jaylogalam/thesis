@@ -1,7 +1,7 @@
 //! Terminal UI for the app.
 
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
@@ -17,6 +17,7 @@ mod ui;
 
 const NAME: &str = env!("CARGO_PKG_NAME");
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+const TRACE_DIR: &str = "traces";
 const TICK: Duration = Duration::from_secs(1);
 
 fn usage() {
@@ -33,10 +34,32 @@ fn usage() {
     println!("  a          Show/hide processes without file activity");
     println!();
     println!("Options:");
-    println!("  --record FILE  Also save every event to FILE (JSON Lines; must not exist)");
+    println!("  --record FILE  Save every event to FILE (JSON Lines; must not exist)");
+    println!("                 Default for live runs: {TRACE_DIR}/<local date-time>.jsonl");
+    println!("  --no-record    Do not save a trace of a live run");
     println!("  --replay FILE  Play back a recorded FILE instead of live sensors (no root)");
     println!("  -h, --help     Show this help");
     println!("  -V, --version  Show version");
+}
+
+/// `traces/YYYY-MM-DD_HH-MM-SS.jsonl` in local time.
+fn default_trace_path() -> PathBuf {
+    // SAFETY: time() accepts null; localtime_r fills `tm`, which is fully zeroed first.
+    let tm = unsafe {
+        let now = libc::time(std::ptr::null_mut());
+        let mut tm: libc::tm = std::mem::zeroed();
+        libc::localtime_r(&now, &mut tm);
+        tm
+    };
+    PathBuf::from(TRACE_DIR).join(format!(
+        "{:04}-{:02}-{:02}_{:02}-{:02}-{:02}.jsonl",
+        tm.tm_year + 1900,
+        tm.tm_mon + 1,
+        tm.tm_mday,
+        tm.tm_hour,
+        tm.tm_min,
+        tm.tm_sec
+    ))
 }
 
 /// Entry point for the CLI. Returns the process exit code.
@@ -44,6 +67,7 @@ pub fn run(args: impl Iterator<Item = String>) -> i32 {
     let mut args = args;
     let mut record = None;
     let mut replay = None;
+    let mut no_record = false;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-h" | "--help" => {
@@ -54,6 +78,7 @@ pub fn run(args: impl Iterator<Item = String>) -> i32 {
                 println!("{NAME} v{VERSION}");
                 return 0;
             }
+            "--no-record" => no_record = true,
             "--record" | "--replay" => {
                 let Some(file) = args.next() else {
                     eprintln!("error: {arg} needs a FILE argument\n");
@@ -70,10 +95,14 @@ pub fn run(args: impl Iterator<Item = String>) -> i32 {
             }
         }
     }
-    if record.is_some() && replay.is_some() {
-        eprintln!("error: --record and --replay cannot be combined\n");
+    if (record.is_some() && replay.is_some()) || (record.is_some() && no_record) {
+        let msg = if replay.is_some() { "--record and --replay" } else { "--record and --no-record" };
+        eprintln!("error: {msg} cannot be combined\n");
         usage();
         return 2;
+    }
+    if replay.is_none() && record.is_none() && !no_record {
+        record = Some(default_trace_path());
     }
 
     // Fail before taking over the terminal, so the error stays readable.
@@ -83,6 +112,9 @@ pub fn run(args: impl Iterator<Item = String>) -> i32 {
             // Process sensor first so a process is known before its file events.
             None => vec![Box::new(ProcessSensor::new()), Box::new(FileSensor::new()?)],
         };
+        if let Some(dir) = record.as_deref().and_then(Path::parent).filter(|d| !d.as_os_str().is_empty()) {
+            std::fs::create_dir_all(dir)?;
+        }
         let recorder = record.as_deref().map(Recorder::create).transpose()?;
         Ok((sensors, recorder))
     };
