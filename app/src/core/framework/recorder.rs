@@ -49,7 +49,8 @@ mod tests {
         let file = |op, p: &OsStr| ev(EventKind::File { op, path: Some(PathBuf::from(p)) });
         #[allow(unused_mut)] // only modified on unix
         let mut events = vec![
-            ev(EventKind::ProcessStart { name: "p".into(), exe: None, start_ticks: 5 }),
+            ev(EventKind::ProcessStart { name: "p".into(), exe: None, start_ticks: 5, ppid: 1, cmdline: "p -x".into() }),
+            ev(EventKind::ProcessExec { name: "q".into(), exe: Some("/usr/bin/q".into()), cmdline: "q".into() }),
             file(FileOp::Write, OsStr::new("/tmp/x")),
             ev(EventKind::ProcessExit),
         ];
@@ -59,8 +60,8 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::ffi::OsStrExt;
-            events.insert(2, file(FileOp::Delete, OsStr::from_bytes(b"/tmp/\xff")));
-            want.insert(2, file(FileOp::Delete, OsStr::new("/tmp/\u{FFFD}")));
+            events.insert(3, file(FileOp::Delete, OsStr::from_bytes(b"/tmp/\xff")));
+            want.insert(3, file(FileOp::Delete, OsStr::new("/tmp/\u{FFFD}")));
         }
 
         let mut rec = Recorder::create(&path).unwrap();

@@ -10,7 +10,7 @@ use ratatui::widgets::TableState;
 use crate::core::framework::dispatch;
 use crate::core::framework::recorder::Recorder;
 use crate::core::sensors::{FileSensor, ProcessSensor, Sensor, replay::ReplaySensor};
-use app::App;
+use app::{App, View};
 
 mod app;
 mod ui;
@@ -25,15 +25,19 @@ fn usage() {
     println!();
     println!("Usage: {NAME} [OPTIONS]");
     println!();
-    println!("Live view of file activity per process (create, open, read, write,");
-    println!("rename, delete). Needs root (Linux) or Administrator (Windows), except with --replay.");
+    println!("Live view of process creation chains: parent and child image, tree depth,");
+    println!("command-line entropy, and alerts for suspicious parent-child pairs and");
+    println!("command lines. With --files, also file activity per process.");
+    println!("Needs Linux >= 6.6 (or root); --files needs root (Linux) or Administrator (Windows).");
     println!();
     println!("Keys:");
     println!("  q, Ctrl-C  Quit");
-    println!("  Up/Down    Select a process row");
-    println!("  a          Show/hide processes without file activity");
+    println!("  Up/Down    Select a row");
+    println!("  Tab        Switch between the process and file views");
+    println!("  a          Show/hide processes without file activity (file view)");
     println!();
     println!("Options:");
+    println!("  --files        Also watch file activity (fanotify on Linux, ETW on Windows)");
     println!("  --record FILE  Save every event to FILE (JSON Lines; must not exist)");
     println!("                 Default for live runs: {TRACE_DIR}/<local date-time>.jsonl");
     println!("  --no-record    Do not save a trace of a live run");
@@ -54,6 +58,7 @@ pub fn run(args: impl Iterator<Item = String>) -> i32 {
     let mut record = None;
     let mut replay = None;
     let mut no_record = false;
+    let mut files = false;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-h" | "--help" => {
@@ -65,6 +70,7 @@ pub fn run(args: impl Iterator<Item = String>) -> i32 {
                 return 0;
             }
             "--no-record" => no_record = true,
+            "--files" => files = true,
             "--record" | "--replay" => {
                 let Some(file) = args.next() else {
                     eprintln!("error: {arg} needs a FILE argument\n");
@@ -81,8 +87,16 @@ pub fn run(args: impl Iterator<Item = String>) -> i32 {
             }
         }
     }
-    if (record.is_some() && replay.is_some()) || (record.is_some() && no_record) {
-        let msg = if replay.is_some() { "--record and --replay" } else { "--record and --no-record" };
+    let conflict = if record.is_some() && replay.is_some() {
+        Some("--record and --replay")
+    } else if record.is_some() && no_record {
+        Some("--record and --no-record")
+    } else if files && replay.is_some() {
+        Some("--files and --replay")
+    } else {
+        None
+    };
+    if let Some(msg) = conflict {
         eprintln!("error: {msg} cannot be combined\n");
         usage();
         return 2;
@@ -93,11 +107,14 @@ pub fn run(args: impl Iterator<Item = String>) -> i32 {
 
     // Fail before taking over the terminal, so the error stays readable.
     let setup = || -> io::Result<(Vec<Box<dyn Sensor>>, Option<Recorder>)> {
-        let sensors: Vec<Box<dyn Sensor>> = match &replay {
+        let mut sensors: Vec<Box<dyn Sensor>> = match &replay {
             Some(file) => vec![Box::new(ReplaySensor::open(file)?)],
-            // Process sensor first so a process is known before its file events.
-            None => vec![Box::new(ProcessSensor::new()), Box::new(FileSensor::new()?)],
+            None => vec![Box::new(ProcessSensor::new()?)],
         };
+        // After the process sensor, so a process is known before its file events.
+        if files {
+            sensors.push(Box::new(FileSensor::new()?));
+        }
         if let Some(dir) = record.as_deref().and_then(Path::parent).filter(|d| !d.as_os_str().is_empty()) {
             std::fs::create_dir_all(dir)?;
         }
@@ -111,10 +128,11 @@ pub fn run(args: impl Iterator<Item = String>) -> i32 {
             return 1;
         }
     };
+    let watched = if files { "processes + files" } else { "processes" };
     let source = match (&replay, &record) {
         (Some(file), _) => format!("replay {}", file.display()),
-        (None, Some(file)) => format!("live · recording to {}", file.display()),
-        (None, None) => "live".into(),
+        (None, Some(file)) => format!("live {watched} · recording to {}", file.display()),
+        (None, None) => format!("live {watched}"),
     };
 
     let mut terminal = ratatui::init();
@@ -168,6 +186,10 @@ fn event_loop(
                 KeyCode::Char('q') => break,
                 KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => break,
                 KeyCode::Char('a') => app.show_idle = !app.show_idle,
+                KeyCode::Tab => {
+                    app.view = if app.view == View::Processes { View::Files } else { View::Processes };
+                    table.select(None);
+                }
                 KeyCode::Down => table.select_next(),
                 KeyCode::Up => table.select_previous(),
                 _ => {}

@@ -1,5 +1,7 @@
 //! Feature extraction: turns the event stream into per-process features.
 
+pub mod chains;
+
 use std::collections::HashMap;
 use std::io;
 
@@ -69,6 +71,11 @@ impl Processor for FileCountExtractor {
                 e.name.clone_from(name);
                 e.start_ticks = Some(*start_ticks);
             }
+            EventKind::ProcessExec { name, .. } => {
+                if let Some(e) = self.procs.get_mut(&ev.pid) {
+                    e.name.clone_from(name);
+                }
+            }
             EventKind::ProcessExit => {
                 self.procs.remove(&ev.pid);
             }
@@ -103,7 +110,7 @@ mod tests {
         Event { timestamp: SystemTime::now(), pid, kind }
     }
     fn start(pid: u32, ticks: u64) -> Event {
-        ev(pid, EventKind::ProcessStart { name: "p".into(), exe: None, start_ticks: ticks })
+        ev(pid, EventKind::ProcessStart { name: "p".into(), exe: None, start_ticks: ticks, ppid: 0, cmdline: String::new() })
     }
     fn file(pid: u32, op: FileOp) -> Event {
         ev(pid, EventKind::File { op, path: None })

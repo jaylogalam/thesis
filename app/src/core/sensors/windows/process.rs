@@ -29,8 +29,8 @@ pub struct ProcessSensor {
 }
 
 impl ProcessSensor {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new() -> io::Result<Self> {
+        Ok(Self::default())
     }
 }
 
@@ -63,8 +63,8 @@ fn details(pid: u32) -> Option<(u64, Option<PathBuf>)> {
     }
 }
 
-/// `(pid, name)` of every running process.
-fn snapshot() -> io::Result<Vec<(u32, String)>> {
+/// `(pid, ppid, name)` of every running process.
+fn snapshot() -> io::Result<Vec<(u32, u32, String)>> {
     // SAFETY: the snapshot handle is closed on every path; `entry` is initialised with its size.
     unsafe {
         let snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -78,7 +78,7 @@ fn snapshot() -> io::Result<Vec<(u32, String)>> {
         while ok {
             let len = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
             let name = OsString::from_wide(&entry.szExeFile[..len]).to_string_lossy().into_owned();
-            procs.push((entry.th32ProcessID, name));
+            procs.push((entry.th32ProcessID, entry.th32ParentProcessID, name));
             ok = Process32NextW(snap, &mut entry) != 0;
         }
         CloseHandle(snap);
@@ -92,7 +92,7 @@ impl Sensor for ProcessSensor {
         let mut events = Vec::new();
         let mut seen = HashSet::new();
 
-        for (pid, name) in snapshot()? {
+        for (pid, ppid, name) in snapshot()? {
             if is_kernel(pid) {
                 continue;
             }
@@ -104,7 +104,10 @@ impl Sensor for ProcessSensor {
                 Some(_) => events.push(Event { timestamp: now, pid, kind: EventKind::ProcessExit }),
                 None => {}
             }
-            events.push(Event { timestamp: now, pid, kind: EventKind::ProcessStart { name, exe, start_ticks } });
+            // ponytail: no command line; reading it takes NtQueryInformationProcess
+            // (ProcessCommandLineInformation), so the command-line features stay empty on Windows.
+            let kind = EventKind::ProcessStart { name, exe, start_ticks, ppid, cmdline: String::new() };
+            events.push(Event { timestamp: now, pid, kind });
         }
 
         self.known.retain(|pid, _| {
@@ -124,7 +127,7 @@ mod tests {
 
     #[test]
     fn reports_start_once_then_exit() {
-        let mut sensor = ProcessSensor::new();
+        let mut sensor = ProcessSensor::new().unwrap();
         let me = std::process::id();
         let first = sensor.poll().unwrap();
         assert!(first.iter().any(|e| e.pid == me && matches!(e.kind, EventKind::ProcessStart { .. })));

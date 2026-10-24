@@ -18,13 +18,25 @@ pub enum FileOp {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum EventKind {
-    /// A process was first seen (`e0` of its event stream).
+    /// A process was first seen (`e0` of its event stream): forked, or
+    /// already running when monitoring started.
     ProcessStart {
         name: String,
         #[serde(serialize_with = "lossy")]
         exe: Option<PathBuf>,
         /// Process start time in clock ticks since boot; distinguishes a reused pid.
         start_ticks: u64,
+        /// The process that created it (0 if unknown).
+        ppid: u32,
+        /// Arguments joined by spaces; empty if unreadable.
+        cmdline: String,
+    },
+    /// The process replaced its program image (execve).
+    ProcessExec {
+        name: String,
+        #[serde(serialize_with = "lossy")]
+        exe: Option<PathBuf>,
+        cmdline: String,
     },
     ProcessExit,
     /// `path` is None when the kernel could not resolve it (e.g. already deleted).
