@@ -110,7 +110,7 @@ mod tests {
         Event { timestamp: SystemTime::now(), pid, kind }
     }
     fn start(pid: u32, ticks: u64) -> Event {
-        ev(pid, EventKind::ProcessStart { name: "p".into(), exe: None, start_ticks: ticks, ppid: 0, cmdline: String::new() })
+        ev(pid, EventKind::ProcessStart { name: "p".into(), exe: None, start_ticks: ticks, ppid: 0, parent_exe: None, cmdline: String::new() })
     }
     fn file(pid: u32, op: FileOp) -> Event {
         ev(pid, EventKind::File { op, path: None })

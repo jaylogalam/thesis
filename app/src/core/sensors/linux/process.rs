@@ -207,6 +207,7 @@ fn start_kind(pid: u32, stat: Stat) -> EventKind {
         exe: read_exe(pid),
         start_ticks: stat.start_ticks,
         ppid: stat.ppid,
+        parent_exe: read_exe(stat.ppid),
         cmdline: read_cmdline(pid),
     }
 }

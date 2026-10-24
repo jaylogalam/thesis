@@ -219,7 +219,7 @@ mod tests {
     }
     fn start(pid: u32, ppid: u32, name: &str, cmdline: &str) -> Event {
         let (name, cmdline) = (name.into(), cmdline.into());
-        ev(pid, EventKind::ProcessStart { name, exe: None, start_ticks: pid.into(), ppid, cmdline })
+        ev(pid, EventKind::ProcessStart { name, exe: None, start_ticks: pid.into(), ppid, parent_exe: None, cmdline })
     }
 
     fn render(app: &App) -> String {

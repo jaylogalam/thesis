@@ -28,6 +28,9 @@ pub enum EventKind {
         start_ticks: u64,
         /// The process that created it (0 if unknown).
         ppid: u32,
+        /// Executable of the parent, if known when this process was seen.
+        #[serde(default, serialize_with = "lossy")]
+        parent_exe: Option<PathBuf>,
         /// Arguments joined by spaces; empty if unreadable.
         cmdline: String,
     },

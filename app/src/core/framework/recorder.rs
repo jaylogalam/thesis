@@ -49,7 +49,7 @@ mod tests {
         let file = |op, p: &OsStr| ev(EventKind::File { op, path: Some(PathBuf::from(p)) });
         #[allow(unused_mut)] // only modified on unix
         let mut events = vec![
-            ev(EventKind::ProcessStart { name: "p".into(), exe: None, start_ticks: 5, ppid: 1, cmdline: "p -x".into() }),
+            ev(EventKind::ProcessStart { name: "p".into(), exe: None, start_ticks: 5, ppid: 1, parent_exe: Some("/usr/bin/init".into()), cmdline: "p -x".into() }),
             ev(EventKind::ProcessExec { name: "q".into(), exe: Some("/usr/bin/q".into()), cmdline: "q".into() }),
             file(FileOp::Write, OsStr::new("/tmp/x")),
             ev(EventKind::ProcessExit),

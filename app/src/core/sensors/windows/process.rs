@@ -1,123 +1,245 @@
-//! Process start/exit events from Toolhelp snapshots (no privileges needed;
-//! protected processes still show up, just without exe path and start time).
+//! Process start/exit events read from the Sysmon event log
+//! (`Microsoft-Windows-Sysmon/Operational`: Event ID 1 process create, 5 process terminate).
+//! Sysmon must be installed and logging both; the log needs Administrator or
+//! Event Log Readers membership. Unlike a snapshot poll, it reports every process
+//! with its command line and parent image, including short-lived ones.
 
-use std::collections::{HashMap, HashSet};
-use std::ffi::OsString;
-use std::io;
-use std::os::windows::ffi::OsStringExt;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-use windows_sys::Win32::Foundation::{CloseHandle, FILETIME, INVALID_HANDLE_VALUE};
-use windows_sys::Win32::System::Diagnostics::ToolHelp::{
-    CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS,
-};
-use windows_sys::Win32::System::Threading::{
-    GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
-};
-
 use crate::core::event::{Event, EventKind};
-use crate::core::sensors::Sensor;
 
-/// Detects processes by taking a snapshot on every poll.
-// ponytail: processes that start and exit between two polls are never seen.
-// Use the Microsoft-Windows-Kernel-Process ETW provider for exact lifecycle events.
-#[derive(Default)]
-pub struct ProcessSensor {
-    /// pid -> start_ticks of every process already reported.
-    known: HashMap<u32, u64>,
+/// A Sysmon event reduced to the fields the sensor uses.
+#[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(not(windows), allow(dead_code))]
+pub enum Sysmon {
+    Create { pid: u32, ppid: u32, image: String, parent_image: Option<String>, cmdline: String, utc_time: String },
+    Terminate { pid: u32 },
 }
 
-impl ProcessSensor {
-    pub fn new() -> io::Result<Self> {
-        Ok(Self::default())
+/// Parse the rendered XML of an Event ID 1 or 5; None for any other event or malformed XML.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn parse(xml: &str) -> Option<Sysmon> {
+    let id = {
+        let rest = &xml[xml.find("<EventID")?..];
+        let rest = &rest[rest.find('>')? + 1..];
+        &rest[..rest.find('<')?]
+    };
+    let fields = data_fields(xml);
+    let field = |name: &str| fields.iter().find(|(n, _)| *n == name).map(|(_, v)| unescape(v));
+    let number = |name: &str| field(name)?.trim().parse::<u32>().ok();
+    match id.trim() {
+        "1" => Some(Sysmon::Create {
+            pid: number("ProcessId")?,
+            ppid: number("ParentProcessId")?,
+            image: field("Image")?,
+            parent_image: field("ParentImage").filter(|p| !p.is_empty() && p != "-"),
+            cmdline: field("CommandLine")?,
+            utc_time: field("UtcTime")?,
+        }),
+        "5" => Some(Sysmon::Terminate { pid: number("ProcessId")? }),
+        _ => None,
     }
 }
 
-/// pid 0 is the idle pseudo-process and pid 4 the kernel ("System"): no user-space behavior.
-fn is_kernel(pid: u32) -> bool {
-    pid == 0 || pid == 4
+/// `(name, raw value)` of every `<Data Name='X'>value</Data>`; `<Data Name='X' />` is empty.
+/// Windows renders attributes with single quotes, but either quote is accepted.
+fn data_fields(xml: &str) -> Vec<(&str, &str)> {
+    const OPEN: &str = "<Data Name=";
+    let mut out = Vec::new();
+    let mut rest = xml;
+    while let Some(i) = rest.find(OPEN) {
+        rest = &rest[i + OPEN.len()..];
+        let Some(q) = rest.chars().next().filter(|c| matches!(c, '\'' | '"')) else { continue };
+        let Some(end) = rest[1..].find(q) else { break };
+        let name = &rest[1..1 + end];
+        rest = &rest[end + 2..];
+        let Some(gt) = rest.find('>') else { break };
+        if rest[..gt].ends_with('/') {
+            out.push((name, ""));
+            rest = &rest[gt + 1..];
+        } else {
+            let body = &rest[gt + 1..];
+            let Some(close) = body.find("</Data>") else { break };
+            out.push((name, &body[..close]));
+            rest = &body[close..];
+        }
+    }
+    out
 }
 
-/// Creation time (100 ns ticks since 1601) and exe path of a process; None if it cannot be opened.
-// ponytail: protected processes cannot be opened, so they get start_ticks 0 and
-// a reused pid goes unnoticed for them.
-fn details(pid: u32) -> Option<(u64, Option<PathBuf>)> {
-    // SAFETY: plain calls; the handle is closed before returning and buffers outlive the calls.
-    unsafe {
-        let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
-        if h.is_null() {
+/// `&amp;` last, so `&amp;lt;` becomes the text `&lt;`.
+fn unescape(s: &str) -> String {
+    s.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&apos;", "'").replace("&amp;", "&")
+}
+
+/// Seconds between 1601-01-01 (FILETIME epoch) and 1970-01-01, in microseconds.
+const FILETIME_UNIX_EPOCH_MICROS: u64 = 11_644_473_600_000_000;
+
+/// FILETIME ticks (100 ns since 1601) of a Sysmon `UtcTime`; 0 if unparsable.
+fn filetime_ticks(utc_time: &str) -> u64 {
+    chrono::NaiveDateTime::parse_from_str(utc_time, "%Y-%m-%d %H:%M:%S%.f")
+        .ok()
+        .and_then(|t| u64::try_from(t.and_utc().timestamp_micros()).ok())
+        .map_or(0, |micros| (micros + FILETIME_UNIX_EPOCH_MICROS) * 10)
+}
+
+/// `now` is when the sensor observed the event, as in every other sensor.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn to_events(s: Sysmon, now: SystemTime) -> Event {
+    match s {
+        Sysmon::Create { pid, ppid, image, parent_image, cmdline, utc_time } => {
+            let name = image.rsplit(['\\', '/']).next().unwrap_or(&image).to_string();
+            let kind = EventKind::ProcessStart {
+                name,
+                start_ticks: filetime_ticks(&utc_time),
+                ppid,
+                parent_exe: parent_image.map(PathBuf::from),
+                exe: Some(PathBuf::from(image)),
+                cmdline,
+            };
+            Event { timestamp: now, pid, kind }
+        }
+        Sysmon::Terminate { pid } => Event { timestamp: now, pid, kind: EventKind::ProcessExit },
+    }
+}
+
+#[cfg(windows)]
+pub use sensor::ProcessSensor;
+
+#[cfg(windows)]
+mod sensor {
+    use std::ffi::c_void;
+    use std::io;
+    use std::ptr::null_mut;
+    use std::sync::mpsc::{self, Receiver, Sender};
+    use std::time::SystemTime;
+
+    use windows_sys::Win32::System::EventLog::{
+        EVT_HANDLE, EvtClose, EvtRender, EvtRenderEventXml, EvtSubscribe, EvtSubscribeActionDeliver,
+        EvtSubscribeToFutureEvents,
+    };
+
+    use super::{parse, to_events};
+    use crate::core::event::Event;
+    use crate::core::sensors::Sensor;
+
+    const CHANNEL: &str = "Microsoft-Windows-Sysmon/Operational";
+    const QUERY: &str = "*[System[(EventID=1 or EventID=5)]]";
+    const ERROR_ACCESS_DENIED: i32 = 5;
+    const ERROR_EVT_CHANNEL_NOT_FOUND: i32 = 15007;
+
+    type Item = io::Result<Event>;
+
+    /// Subscribes to future Sysmon events; processes already running at start are not reported.
+    pub struct ProcessSensor {
+        sub: EVT_HANDLE,
+        /// Leaked `Sender` owned by the callback; freed in `Drop` after the subscription is closed.
+        ctx: *mut Sender<Item>,
+        rx: Receiver<Item>,
+    }
+
+    fn wide(s: &str) -> Vec<u16> {
+        s.encode_utf16().chain(Some(0)).collect()
+    }
+
+    impl ProcessSensor {
+        pub fn new() -> io::Result<Self> {
+            let (tx, rx) = mpsc::channel();
+            let ctx = Box::into_raw(Box::new(tx));
+            let (channel, query) = (wide(CHANNEL), wide(QUERY));
+            // SAFETY: both strings are NUL-terminated and outlive the call; `ctx` stays
+            // valid until `Drop` has closed the subscription.
+            let sub = unsafe {
+                EvtSubscribe(
+                    0,
+                    null_mut(),
+                    channel.as_ptr(),
+                    query.as_ptr(),
+                    0,
+                    ctx as *const c_void,
+                    Some(callback),
+                    EvtSubscribeToFutureEvents,
+                )
+            };
+            if sub == 0 {
+                let err = io::Error::last_os_error();
+                // SAFETY: no subscription exists, so nothing else holds `ctx`.
+                drop(unsafe { Box::from_raw(ctx) });
+                return Err(subscribe_error(err));
+            }
+            Ok(Self { sub, ctx, rx })
+        }
+    }
+
+    fn subscribe_error(err: io::Error) -> io::Error {
+        match err.raw_os_error() {
+            Some(ERROR_EVT_CHANNEL_NOT_FOUND) => io::Error::new(
+                io::ErrorKind::NotFound,
+                "Sysmon is not installed (log 'Microsoft-Windows-Sysmon/Operational' not found); \
+                 install it with: Sysmon64.exe -accepteula -i <config>",
+            ),
+            Some(ERROR_ACCESS_DENIED) => io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "reading the Sysmon log needs Administrator or Event Log Readers membership; \
+                 run from an elevated terminal",
+            ),
+            _ => err,
+        }
+    }
+
+    /// Runs on a thread of the Windows thread pool.
+    unsafe extern "system" fn callback(action: i32, ctx: *const c_void, event: EVT_HANDLE) -> u32 {
+        // SAFETY: `ctx` is the `Sender` leaked in `new`, alive until `EvtClose` in `Drop` returns.
+        let tx = unsafe { &*(ctx as *const Sender<Item>) };
+        let item = if action == EvtSubscribeActionDeliver {
+            // SAFETY: `event` is valid for the duration of the callback.
+            unsafe { render(event) }.and_then(|xml| parse(&xml)).map(|s| Ok(to_events(s, SystemTime::now())))
+        } else {
+            // Not a delivery: `event` carries the Win32 error code.
+            Some(Err(io::Error::from_raw_os_error(event as i32)))
+        };
+        if let Some(item) = item {
+            // The receiver is gone only while the app shuts down.
+            let _ = tx.send(item);
+        }
+        0
+    }
+
+    /// The event as XML text.
+    unsafe fn render(event: EVT_HANDLE) -> Option<String> {
+        let (mut used, mut props) = (0u32, 0u32);
+        // SAFETY: a zero-size buffer only asks for the required size.
+        unsafe { EvtRender(0, event, EvtRenderEventXml, 0, null_mut(), &mut used, &mut props) };
+        if used == 0 {
             return None;
         }
-        let zero = FILETIME { dwLowDateTime: 0, dwHighDateTime: 0 };
-        let (mut created, mut a, mut b, mut c) = (zero, zero, zero, zero);
-        let ticks = (GetProcessTimes(h, &mut created, &mut a, &mut b, &mut c) != 0)
-            .then(|| (u64::from(created.dwHighDateTime) << 32) | u64::from(created.dwLowDateTime));
-
-        let mut buf = [0u16; 1024];
-        let mut len = buf.len() as u32;
-        let exe = (QueryFullProcessImageNameW(h, 0, buf.as_mut_ptr(), &mut len) != 0)
-            .then(|| PathBuf::from(OsString::from_wide(&buf[..len as usize])));
-        CloseHandle(h);
-        ticks.map(|t| (t, exe))
+        let mut buf = vec![0u16; (used as usize).div_ceil(2)];
+        // SAFETY: `buf` holds `buf.len() * 2` bytes.
+        let ok = unsafe {
+            EvtRender(0, event, EvtRenderEventXml, (buf.len() * 2) as u32, buf.as_mut_ptr().cast(), &mut used, &mut props)
+        };
+        if ok == 0 {
+            return None;
+        }
+        let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+        Some(String::from_utf16_lossy(&buf[..end]))
     }
-}
 
-/// `(pid, ppid, name)` of every running process.
-fn snapshot() -> io::Result<Vec<(u32, u32, String)>> {
-    // SAFETY: the snapshot handle is closed on every path; `entry` is initialised with its size.
-    unsafe {
-        let snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-        if snap == INVALID_HANDLE_VALUE {
-            return Err(io::Error::last_os_error());
+    impl Sensor for ProcessSensor {
+        fn poll(&mut self) -> io::Result<Vec<Event>> {
+            self.rx.try_iter().collect()
         }
-        let mut entry: PROCESSENTRY32W = std::mem::zeroed();
-        entry.dwSize = size_of::<PROCESSENTRY32W>() as u32;
-        let mut procs = Vec::new();
-        let mut ok = Process32FirstW(snap, &mut entry) != 0;
-        while ok {
-            let len = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
-            let name = OsString::from_wide(&entry.szExeFile[..len]).to_string_lossy().into_owned();
-            procs.push((entry.th32ProcessID, entry.th32ParentProcessID, name));
-            ok = Process32NextW(snap, &mut entry) != 0;
-        }
-        CloseHandle(snap);
-        Ok(procs)
     }
-}
 
-impl Sensor for ProcessSensor {
-    fn poll(&mut self) -> io::Result<Vec<Event>> {
-        let now = SystemTime::now();
-        let mut events = Vec::new();
-        let mut seen = HashSet::new();
-
-        for (pid, ppid, name) in snapshot()? {
-            if is_kernel(pid) {
-                continue;
+    impl Drop for ProcessSensor {
+        fn drop(&mut self) {
+            // SAFETY: closing waits for in-flight callbacks, after which `ctx` is unused.
+            unsafe {
+                EvtClose(self.sub);
+                drop(Box::from_raw(self.ctx));
             }
-            seen.insert(pid);
-            // Unreadable (protected, or gone already): still running, start time unknown.
-            let (start_ticks, exe) = details(pid).unwrap_or((0, None));
-            match self.known.insert(pid, start_ticks) {
-                Some(old) if old == start_ticks => continue,
-                Some(_) => events.push(Event { timestamp: now, pid, kind: EventKind::ProcessExit }),
-                None => {}
-            }
-            // ponytail: no command line; reading it takes NtQueryInformationProcess
-            // (ProcessCommandLineInformation), so the command-line features stay empty on Windows.
-            let kind = EventKind::ProcessStart { name, exe, start_ticks, ppid, cmdline: String::new() };
-            events.push(Event { timestamp: now, pid, kind });
         }
-
-        self.known.retain(|pid, _| {
-            let alive = seen.contains(pid);
-            if !alive {
-                events.push(Event { timestamp: now, pid: *pid, kind: EventKind::ProcessExit });
-            }
-            alive
-        });
-        Ok(events)
     }
 }
 
@@ -125,26 +247,85 @@ impl Sensor for ProcessSensor {
 mod tests {
     use super::*;
 
+    fn create_xml(utc: &str, parent: &str) -> String {
+        format!(
+            "<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>\
+             <EventID>1</EventID><Channel>Microsoft-Windows-Sysmon/Operational</Channel></System>\
+             <EventData>\
+             <Data Name='RuleName'>-</Data>\
+             <Data Name='UtcTime'>{utc}</Data>\
+             <Data Name='ProcessId'>4242</Data>\
+             <Data Name='Image'>C:\\Windows\\System32\\cmd.exe</Data>\
+             <Data Name='CommandLine'>cmd.exe /c echo &quot;a&quot; &amp;&amp; dir</Data>\
+             <Data Name='CurrentDirectory' />\
+             <Data Name='ParentProcessId'>1000</Data>\
+             <Data Name='ParentImage'>{parent}</Data>\
+             </EventData></Event>"
+        )
+    }
+
+    const WORD: &str = "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE";
+
     #[test]
-    fn reports_start_once_then_exit() {
-        let mut sensor = ProcessSensor::new().unwrap();
-        let me = std::process::id();
-        let first = sensor.poll().unwrap();
-        assert!(first.iter().any(|e| e.pid == me && matches!(e.kind, EventKind::ProcessStart { .. })));
-        // Nothing new for a process that is still running.
-        assert!(!sensor.poll().unwrap().iter().any(|e| e.pid == me));
+    fn parses_process_create_and_maps_it_to_an_event() {
+        let Some(Sysmon::Create { pid, ppid, image, parent_image, cmdline, utc_time }) =
+            parse(&create_xml("2026-10-24 08:12:33.123", WORD))
+        else {
+            panic!("not a create")
+        };
+        assert_eq!((pid, ppid), (4242, 1000));
+        assert_eq!(image, "C:\\Windows\\System32\\cmd.exe");
+        assert_eq!(parent_image.as_deref(), Some(WORD));
+        assert_eq!(cmdline, "cmd.exe /c echo \"a\" && dir");
+        assert_eq!(utc_time, "2026-10-24 08:12:33.123");
 
-        let mut child = std::process::Command::new("cmd").args(["/C", "ping -n 6 127.0.0.1 >nul"]).spawn().unwrap();
-        let cpid = child.id();
-        let started = sensor.poll().unwrap();
-        let start = started.iter().find(|e| e.pid == cpid).expect("child start");
-        let EventKind::ProcessStart { name, exe, .. } = &start.kind else { panic!() };
-        assert!(name.eq_ignore_ascii_case("cmd.exe"), "{name}");
-        assert!(exe.as_ref().unwrap().ends_with("cmd.exe"));
+        let now = SystemTime::now();
+        let ev = to_events(parse(&create_xml("2026-10-24 08:12:33.123", WORD)).unwrap(), now);
+        assert_eq!((ev.pid, ev.timestamp), (4242, now));
+        let EventKind::ProcessStart { name, exe, start_ticks, ppid, parent_exe, cmdline } = ev.kind else { panic!() };
+        assert_eq!((name.as_str(), ppid), ("cmd.exe", 1000));
+        assert_eq!(exe, Some(PathBuf::from("C:\\Windows\\System32\\cmd.exe")));
+        assert_eq!(parent_exe, Some(PathBuf::from(WORD)));
+        assert_eq!(cmdline, "cmd.exe /c echo \"a\" && dir");
 
-        child.kill().unwrap();
-        child.wait().unwrap();
-        let ended = sensor.poll().unwrap();
-        assert!(ended.iter().any(|e| e.pid == cpid && e.kind == EventKind::ProcessExit));
+        let later = to_events(parse(&create_xml("2026-10-24 08:12:33.124", WORD)).unwrap(), now);
+        let EventKind::ProcessStart { start_ticks: later_ticks, .. } = later.kind else { panic!() };
+        assert_eq!(later_ticks - start_ticks, 10_000);
+    }
+
+    #[test]
+    fn start_ticks_count_from_1601() {
+        assert_eq!(filetime_ticks("1970-01-01 00:00:00.000"), 116_444_736_000_000_000);
+        assert_eq!(filetime_ticks("not a time"), 0);
+    }
+
+    #[test]
+    fn dash_parent_is_unknown() {
+        let Some(Sysmon::Create { parent_image, .. }) = parse(&create_xml("2026-10-24 08:12:33.123", "-")) else {
+            panic!()
+        };
+        assert_eq!(parent_image, None);
+    }
+
+    #[test]
+    fn parses_process_terminate() {
+        let xml = "<Event><System><EventID>5</EventID></System><EventData>\
+                   <Data Name=\"UtcTime\">2026-10-24 08:12:34.000</Data>\
+                   <Data Name=\"ProcessId\">4242</Data>\
+                   <Data Name=\"Image\">C:\\Windows\\System32\\cmd.exe</Data></EventData></Event>";
+        let s = parse(xml).unwrap();
+        assert_eq!(s, Sysmon::Terminate { pid: 4242 });
+        assert!(matches!(to_events(s, SystemTime::now()).kind, EventKind::ProcessExit));
+    }
+
+    #[test]
+    fn ignores_other_events_and_garbage() {
+        let net = "<Event><System><EventID>3</EventID></System><EventData>\
+                   <Data Name='ProcessId'>1</Data></EventData></Event>";
+        assert_eq!(parse(net), None);
+        assert_eq!(parse("<Event><System><EventID>1</Event"), None);
+        assert_eq!(parse(&create_xml("x", WORD)[..200]), None);
+        assert_eq!(parse("garbage"), None);
+        assert_eq!(parse(""), None);
     }
 }

