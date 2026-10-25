@@ -230,7 +230,7 @@ mod tests {
 
     #[test]
     fn renders_process_and_file_views_and_event_log() {
-        let mut app = App::new("live".into());
+        let mut app = App::new("live".into(), None);
         let events = vec![
             start(10, 1, "editor", "editor notes.txt"),
             start(11, 1, "idle-proc", ""),

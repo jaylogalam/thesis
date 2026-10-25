@@ -200,7 +200,7 @@ impl Processor for ProcessTreeExtractor {
 }
 
 /// Lowercased file name without a trailing `.exe`, so Windows and Linux names compare alike.
-fn image(name: &str, exe: Option<&Path>) -> String {
+pub(crate) fn image(name: &str, exe: Option<&Path>) -> String {
     let lower = exe.and_then(Path::file_name).map_or_else(|| name.to_lowercase(), |f| f.to_string_lossy().to_lowercase());
     lower.strip_suffix(".exe").map(str::to_string).unwrap_or(lower)
 }

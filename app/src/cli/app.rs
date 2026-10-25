@@ -1,9 +1,10 @@
 //! UI state: process and file-activity table rows, and the recent-events log.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::io;
 use std::time::{Instant, SystemTime};
 
+use crate::core::detection::Detector;
 use crate::core::event::{Event, EventKind, FileOp};
 use crate::core::features::chains::{ProcessTreeExtractor, ProcessTreeFeatures};
 use crate::core::features::{FileCountExtractor, FileCounts};
@@ -60,6 +61,10 @@ pub struct App {
     pub started: Instant,
     /// Where events come from (live, recording, replay), shown in the header.
     pub source: String,
+    /// LEDA model, if one was loaded.
+    detector: Option<Detector>,
+    /// Running processes the model flagged malicious.
+    detected: HashSet<u32>,
 }
 
 pub fn total(c: &FileCounts) -> u64 {
@@ -72,7 +77,7 @@ pub fn total(c: &FileCounts) -> u64 {
 }
 
 impl App {
-    pub fn new(source: String) -> Self {
+    pub fn new(source: String, detector: Option<Detector>) -> Self {
         Self {
             extractor: FileCountExtractor::new(),
             tree: ProcessTreeExtractor::new(),
@@ -87,6 +92,8 @@ impl App {
             events_total: 0,
             started: Instant::now(),
             source,
+            detector,
+            detected: HashSet::new(),
         }
     }
 
@@ -110,6 +117,9 @@ impl App {
             .sort_by(|a, b| b.rate.cmp(&a.rate).then(total(&b.counts).cmp(&total(&a.counts))).then(a.pid.cmp(&b.pid)));
 
         self.procs = self.tree.snapshot();
+        for p in self.procs.iter_mut().filter(|p| self.detected.contains(&p.pid)) {
+            p.alerts.insert(0, "LEDA".into());
+        }
         self.procs.sort_by(|a, b| {
             a.alerts.is_empty().cmp(&b.alerts.is_empty()).then(b.start_ticks.cmp(&a.start_ticks)).then(b.pid.cmp(&a.pid))
         });
@@ -126,6 +136,15 @@ impl App {
             self.log.pop_front();
         }
         self.log.push_back(LogLine { time: ev.timestamp, pid: ev.pid, name, kind, detail });
+    }
+
+    /// Log line that also stays in the alerts panel.
+    fn push_alert(&mut self, ev: &Event, detail: String) {
+        self.push_log(ev, LogKind::Alert, detail);
+        if self.alerts.len() == LOG_MAX {
+            self.alerts.pop_front();
+        }
+        self.alerts.extend(self.log.back().cloned());
     }
 
     fn log_event(&mut self, ev: &Event) {
@@ -179,11 +198,24 @@ impl Processor for App {
                 f.cmdline_complexity,
                 f.cmdline
             );
-            self.push_log(ev, LogKind::Alert, detail);
-            if self.alerts.len() == LOG_MAX {
-                self.alerts.pop_front();
+            self.push_alert(ev, detail);
+        }
+        // A start is a new process (possibly a reused pid), an exit ends it: either way no longer flagged.
+        if matches!(ev.kind, EventKind::ProcessStart { .. } | EventKind::ProcessExit) {
+            self.detected.remove(&ev.pid);
+        }
+        let found = match self.detector.as_mut() {
+            Some(d) => {
+                d.on_event(ev, out)?;
+                d.take_detections()
             }
-            self.alerts.extend(self.log.back().cloned());
+            None => Vec::new(),
+        };
+        for d in found {
+            self.detected.insert(d.pid);
+            let detail =
+                format!("LEDA malicious {:.2} · {} · {} · {}", d.score, d.trigger, d.chain.join(" > "), d.cmdline);
+            self.push_alert(ev, detail);
         }
         Ok(())
     }

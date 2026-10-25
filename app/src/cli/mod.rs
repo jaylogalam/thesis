@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::widgets::TableState;
 
+use crate::core::detection::{Detector, Model};
 use crate::core::framework::dispatch;
 use crate::core::framework::recorder::Recorder;
 use crate::core::sensors::{FileSensor, ProcessSensor, Sensor, replay::ReplaySensor};
@@ -19,6 +20,8 @@ const NAME: &str = env!("CARGO_PKG_NAME");
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const TRACE_DIR: &str = "traces";
 const TICK: Duration = Duration::from_secs(1);
+/// The app is run from `app/` (see run.sh); `python -m lotl.export` writes here.
+const DEFAULT_MODEL: &str = "../ai/models/leda_model.json";
 
 fn usage() {
     println!("{NAME} v{VERSION}");
@@ -42,6 +45,8 @@ fn usage() {
     println!("                 Default for live runs: {TRACE_DIR}/<local date-time>.jsonl");
     println!("  --no-record    Do not save a trace of a live run");
     println!("  --replay FILE  Play back a recorded FILE instead of live sensors (no root/admin)");
+    println!("  --model FILE   LEDA model signature file (default: {DEFAULT_MODEL};");
+    println!("                 detection is off if the default file is missing)");
     println!("  -h, --help     Show this help");
     println!("  -V, --version  Show version");
 }
@@ -57,6 +62,7 @@ pub fn run(args: impl Iterator<Item = String>) -> i32 {
     let mut args = args;
     let mut record = None;
     let mut replay = None;
+    let mut model = None;
     let mut no_record = false;
     let mut files = false;
     while let Some(arg) = args.next() {
@@ -71,13 +77,17 @@ pub fn run(args: impl Iterator<Item = String>) -> i32 {
             }
             "--no-record" => no_record = true,
             "--files" => files = true,
-            "--record" | "--replay" => {
+            "--record" | "--replay" | "--model" => {
                 let Some(file) = args.next() else {
                     eprintln!("error: {arg} needs a FILE argument\n");
                     usage();
                     return 2;
                 };
-                let slot = if arg == "--record" { &mut record } else { &mut replay };
+                let slot = match arg.as_str() {
+                    "--record" => &mut record,
+                    "--replay" => &mut replay,
+                    _ => &mut model,
+                };
                 *slot = Some(PathBuf::from(file));
             }
             other => {
@@ -105,7 +115,20 @@ pub fn run(args: impl Iterator<Item = String>) -> i32 {
         record = Some(default_trace_path());
     }
 
-    // Fail before taking over the terminal, so the error stays readable.
+    // Fail before taking over the terminal, so the error stays readable; the model
+    // first, so a bad one leaves no empty trace behind. An explicit --model must
+    // load; the default one is optional.
+    let model = match &model {
+        Some(file) => Some(Model::load(file)),
+        None => Some(Path::new(DEFAULT_MODEL)).filter(|p| p.exists()).map(Model::load),
+    };
+    let detector = match model.transpose() {
+        Ok(m) => m.map(Detector::new),
+        Err(e) => {
+            eprintln!("error: {e}");
+            return 1;
+        }
+    };
     let setup = || -> io::Result<(Vec<Box<dyn Sensor>>, Option<Recorder>)> {
         let mut sensors: Vec<Box<dyn Sensor>> = match &replay {
             Some(file) => vec![Box::new(ReplaySensor::open(file)?)],
@@ -134,9 +157,13 @@ pub fn run(args: impl Iterator<Item = String>) -> i32 {
         (None, Some(file)) => format!("live {watched} · recording to {}", file.display()),
         (None, None) => format!("live {watched}"),
     };
+    let source = match &detector {
+        Some(d) => format!("{source} · LEDA {} trees, triggers {}", d.tree_count(), d.triggers().join(",")),
+        None => format!("{source} · LEDA off"),
+    };
 
     let mut terminal = ratatui::init();
-    let result = event_loop(&mut terminal, &mut sensors, recorder.as_mut(), source);
+    let result = event_loop(&mut terminal, &mut sensors, recorder.as_mut(), source, detector);
     ratatui::restore();
     match result {
         Ok(()) => 0,
@@ -152,8 +179,9 @@ fn event_loop(
     sensors: &mut [Box<dyn Sensor>],
     mut recorder: Option<&mut Recorder>,
     source: String,
+    detector: Option<Detector>,
 ) -> io::Result<()> {
-    let mut app = App::new(source);
+    let mut app = App::new(source, detector);
     let mut table = TableState::default();
     let mut next_tick = Instant::now();
     loop {

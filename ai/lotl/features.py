@@ -170,6 +170,18 @@ def _tokens(cmdline: str) -> list[str]:
         return cmdline.split()
 
 
+def cmdline_rule_hits(cmdline: str) -> list[str]:
+    """CMDLINE_RULES labels hit by `cmdline`, plus `pipe_to_interpreter`; deduplicated, in rule order."""
+    norm = " ".join(cmdline.lower().split()).replace(" |", "|").replace("| ", "|")
+    hits = [label for frag, label in CMDLINE_RULES if _contains_word(norm, frag)]
+    # `... | sh`, `... | sudo python3`: whatever runs after a pipe is an interpreter.
+    for seg in norm.split("|")[1:]:
+        words = [w for w in seg.split(" ") if w and w != "sudo"]
+        if words and image_class(words[0].rsplit("/", 1)[-1]) == "INTERP":
+            hits.append("pipe_to_interpreter")
+    return list(dict.fromkeys(hits))
+
+
 def featurize(record: dict) -> dict[str, float]:
     chain = [c.lower() for c in record["chain"]] or [""]
     cmdline = record["cmdline"]
@@ -221,14 +233,8 @@ def featurize(record: dict) -> dict[str, float]:
         tag(f"URL_{proto.upper()}")
     if _DOMAIN.search(cmdline):
         tag("DOMAIN")
-    for frag, label in CMDLINE_RULES:
-        if _contains_word(norm, frag):
-            tag(f"RULE_{label}")
-    # `... | sh`, `... | sudo python3`: whatever runs after a pipe is an interpreter.
-    for seg in norm.split("|")[1:]:
-        words = [w for w in seg.split(" ") if w and w != "sudo"]
-        if words and image_class(words[0].rsplit("/", 1)[-1]) == "INTERP":
-            tag("RULE_pipe_to_interpreter")
+    for label in cmdline_rule_hits(cmdline):
+        tag(f"RULE_{label}")
     for name, rx in _PATTERNS.items():
         if rx.search(cmdline):
             tag(f"PAT_{name}")
