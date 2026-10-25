@@ -37,8 +37,9 @@ from lotl.chains import load
 from lotl.features import featurize
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_BENIGN = [str(ROOT.parent / "app/traces/*.jsonl"), str(ROOT / "seeds/benign_admin.jsonl")]
-DEFAULT_MALICIOUS = [str(ROOT / "seeds/malicious_chains.jsonl")]
+DEFAULT_BENIGN = [str(ROOT.parent / "app/traces/*.jsonl"), str(ROOT / "seeds/benign_admin.jsonl"),
+                  str(ROOT / "seeds/benign_windows.jsonl")]
+DEFAULT_MALICIOUS = [str(ROOT / "seeds/malicious_chains.jsonl"), str(ROOT / "seeds/malicious_windows.jsonl")]
 
 # Stringlifier stand-in (§3.1): same command line with different volatile values is one example.
 _VOLATILE = [

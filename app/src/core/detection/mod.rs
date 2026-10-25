@@ -182,8 +182,8 @@ mod tests {
 
     #[test]
     fn detector_flags_exec_trigger() {
-        let (model, cases) = fixture();
-        assert_eq!(model.sig.triggers, ["exec"], "regenerate fixture with exec trigger");
+        let (mut model, cases) = fixture();
+        model.sig.triggers = vec!["exec".into()];
         let usable = |c: &&model::tests::GoldenCase| {
             !c.chain.is_empty() && c.chain.len() <= 9 && c.chain.last() != Some(&c.cmdline)
         };
@@ -247,6 +247,30 @@ mod tests {
         let found = d.take_detections();
         assert_eq!(found.iter().map(|x| (x.pid, x.trigger.as_str())).collect::<Vec<_>>(), [(n, "start")]);
         assert_eq!(found[0].chain, c.chain.iter().map(|s| s.to_lowercase()).collect::<Vec<_>>());
+    }
+
+    /// Sysmon reports a start with the full command line and never an exec: the exported
+    /// triggers must still score it.
+    #[test]
+    fn windows_start_without_exec_is_scored() {
+        let (model, cases) = fixture();
+        assert!(model.sig.triggers.iter().any(|t| t == "start"), "triggers {:?} cannot fire on Windows", model.sig.triggers);
+        let chain = |c: &[&str]| c.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let attack = chain(&["explorer", "winword", "powershell"]);
+        let cmdline = "powershell.exe -nop -w hidden -enc JABjAGwAaQBlAG4AdAAgAD0AIABOAGUAdwAtAE8AYgBqAGUAYwB0ACAAUwB5AHMAdABlAG0ALgBOAGUAdAAuAFMAbwBjAGsAZQB0AHMALgBUAEMAUABDAGwAaQBlAG4AdAA=";
+        let case = cases.iter().find(|c| c.chain == attack && c.cmdline == cmdline).expect("seed in golden cases");
+        assert!(case.p1 > 0.5);
+        let mut d = Detector::new(model);
+        let events = vec![
+            start(1, 0, "explorer.exe", "C:\\WINDOWS\\Explorer.EXE"),
+            start(2, 1, "WINWORD.EXE", "WINWORD.EXE /n invoice.docm"),
+            start(3, 2, "powershell.exe", cmdline),
+        ];
+        dispatch(events, &mut [&mut d]).unwrap();
+        let found = d.take_detections();
+        assert_eq!(found.iter().map(|x| (x.pid, x.trigger.as_str())).collect::<Vec<_>>(), [(3, "start")]);
+        assert_eq!(found[0].chain, attack);
+        assert!((found[0].score - case.p1).abs() < 1e-6);
     }
 
     #[test]

