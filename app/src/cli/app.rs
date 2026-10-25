@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::io;
 use std::time::{Instant, SystemTime};
 
+use super::notify::Notifier;
 use crate::core::detection::Detector;
 use crate::core::event::{Event, EventKind, FileOp};
 use crate::core::features::chains::{ProcessTreeExtractor, ProcessTreeFeatures};
@@ -65,6 +66,8 @@ pub struct App {
     detector: Option<Detector>,
     /// Running processes the model flagged malicious.
     detected: HashSet<u32>,
+    /// Desktop notifications for detections; only set for live runs.
+    notifier: Option<Notifier>,
 }
 
 pub fn total(c: &FileCounts) -> u64 {
@@ -94,7 +97,14 @@ impl App {
             source,
             detector,
             detected: HashSet::new(),
+            notifier: None,
         }
+    }
+
+    /// Notify the desktop of every detection (not for replays: they are history).
+    pub fn with_notifications(mut self) -> Self {
+        self.notifier = Some(Notifier::default());
+        self
     }
 
     /// Rebuild the tables from the events received so far.
@@ -216,6 +226,9 @@ impl Processor for App {
             let detail =
                 format!("LEDA malicious {:.2} · {} · {} · {}", d.score, d.trigger, d.chain.join(" > "), d.cmdline);
             self.push_alert(ev, detail);
+            if let Some(n) = self.notifier.as_mut() {
+                n.notify(&d);
+            }
         }
         Ok(())
     }

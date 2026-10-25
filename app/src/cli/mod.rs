@@ -14,6 +14,7 @@ use crate::core::sensors::{FileSensor, ProcessSensor, Sensor, replay::ReplaySens
 use app::{App, View};
 
 mod app;
+mod notify;
 mod ui;
 
 const NAME: &str = env!("CARGO_PKG_NAME");
@@ -163,7 +164,7 @@ pub fn run(args: impl Iterator<Item = String>) -> i32 {
     };
 
     let mut terminal = ratatui::init();
-    let result = event_loop(&mut terminal, &mut sensors, recorder.as_mut(), source, detector);
+    let result = event_loop(&mut terminal, &mut sensors, recorder.as_mut(), source, detector, replay.is_none());
     ratatui::restore();
     match result {
         Ok(()) => 0,
@@ -180,8 +181,12 @@ fn event_loop(
     mut recorder: Option<&mut Recorder>,
     source: String,
     detector: Option<Detector>,
+    notify: bool,
 ) -> io::Result<()> {
     let mut app = App::new(source, detector);
+    if notify {
+        app = app.with_notifications();
+    }
     let mut table = TableState::default();
     let mut next_tick = Instant::now();
     loop {
