@@ -1,0 +1,42 @@
+// Benign hard negatives: everyday admin / developer use of the same binaries the malicious seeds abuse
+// (curl, wget, ssh, sudo, chmod, crontab, python -c ...), so the model learns context, not binary names.
+// Boros et al. 2022 §3: ambiguous commands are kept out of the malicious set; they belong here.
+{"chain": ["systemd", "systemd", "kitty", "bash", "curl"], "cmdline": "curl -fsSL https://api.github.com/repos/rust-lang/rust/releases/latest"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "curl"], "cmdline": "curl -LO https://github.com/neovim/neovim/releases/download/v0.11.0/nvim-linux-x86_64.tar.gz"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "wget"], "cmdline": "wget https://download.pytorch.org/whl/cpu/torch-2.8.0-cp312-linux_x86_64.whl"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "tar"], "cmdline": "tar xzf nvim-linux-x86_64.tar.gz -C /home/user/.local"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "chmod"], "cmdline": "chmod +x scripts/install.sh"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "chmod"], "cmdline": "chmod 600 /home/user/.ssh/id_ed25519"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "ssh"], "cmdline": "ssh -i /home/user/.ssh/id_ed25519 user@192.168.1.20"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "scp"], "cmdline": "scp report.pdf user@192.168.1.20:/srv/share/"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "rsync"], "cmdline": "rsync -avz --delete /home/user/Projects/ /mnt/backup/Projects/"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "sudo"], "cmdline": "sudo pacman -Syu"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "sudo"], "cmdline": "sudo systemctl restart NetworkManager"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "sudo"], "cmdline": "sudo journalctl -u sshd --since today"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "sudo"], "cmdline": "sudo iptables -L -n"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "sudo"], "cmdline": "sudo useradd -m -s /bin/bash intern"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "crontab"], "cmdline": "crontab -l"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "python3"], "cmdline": "python3 -c import sys; print(sys.version)"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "python3"], "cmdline": "python3 -m http.server 8000"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "base64"], "cmdline": "base64 -d secret.b64"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "openssl"], "cmdline": "openssl x509 -in cert.pem -noout -dates"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "find"], "cmdline": "find . -name *.pyc -delete"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "docker"], "cmdline": "docker run --rm -it -p 5432:5432 postgres:17"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "nc"], "cmdline": "nc -zv 192.168.1.20 22"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "ps"], "cmdline": "ps aux"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "cat"], "cmdline": "cat /etc/os-release"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "id"], "cmdline": "id"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "uname"], "cmdline": "uname -r"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "rm"], "cmdline": "rm -rf target node_modules"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "vim"], "cmdline": "vim /etc/hosts"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "sh"], "cmdline": "sh ./scripts/install.sh"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "bash"], "cmdline": "bash -c cargo build --release && ./target/release/app --help"}
+{"chain": ["systemd", "cron", "sh"], "cmdline": "/bin/sh -c test -x /usr/sbin/anacron || run-parts --report /etc/cron.daily"}
+{"chain": ["systemd", "cron", "sh", "logrotate"], "cmdline": "/usr/sbin/logrotate /etc/logrotate.conf"}
+{"chain": ["systemd", "nginx", "php-fpm8.2", "sh"], "cmdline": "sh -c /usr/sbin/sendmail -t -i"}
+{"chain": ["systemd", "java", "sh"], "cmdline": "/bin/sh -c ulimit -n"}
+{"chain": ["systemd", "systemd", "firefox", "xdg-open"], "cmdline": "xdg-open /home/user/Downloads/report.pdf"}
+{"chain": ["systemd", "systemd", "thunderbird", "firefox"], "cmdline": "/usr/lib/firefox/firefox https://example.org/newsletter"}
+{"chain": ["systemd", "sshd", "sshd", "bash"], "cmdline": "-bash"}
+{"chain": ["systemd", "sshd", "sshd", "bash", "git"], "cmdline": "git pull --ff-only"}
+{"chain": ["systemd", "sshd", "sshd", "bash", "htop"], "cmdline": "htop"}

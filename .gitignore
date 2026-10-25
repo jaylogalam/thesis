@@ -2,3 +2,5 @@ target
 out
 data
 traces
+ai/models
+__pycache__

