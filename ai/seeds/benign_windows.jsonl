@@ -1,0 +1,115 @@
+// Benign Windows process creation chains: system services, updaters, office and browser use, and
+// developer/admin work. Many are hard negatives for malicious_windows.jsonl: the same binaries and flags
+// (encoded or execution-policy-bypass PowerShell from tooling, schtasks /create, reg add, procdump,
+// Defender exclusions, Invoke-WebRequest) in a benign context. Some come from a Sysmon trace of this
+// machine (system services, Claude Code's own PowerShell). `"os": "windows"`: no exec, see chains.py.
+{"os": "windows", "chain": ["wininit", "services", "svchost"], "cmdline": "C:\\WINDOWS\\system32\\svchost.exe -k IsolationSession -p"}
+{"os": "windows", "chain": ["wininit", "services", "svchost"], "cmdline": "C:\\WINDOWS\\system32\\svchost.exe -k netsvcs -p -s Schedule"}
+{"os": "windows", "chain": ["services", "svchost", "taskhostw"], "cmdline": "taskhostw.exe Update"}
+{"os": "windows", "chain": ["services", "svchost", "dllhost"], "cmdline": "C:\\WINDOWS\\system32\\DllHost.exe /Processid:{AB8902B4-09CA-4BB6-B78D-A8F59079A8D5}"}
+{"os": "windows", "chain": ["services", "svchost", "rundll32"], "cmdline": "C:\\WINDOWS\\system32\\rundll32.exe C:\\WINDOWS\\system32\\AppXDeploymentExtensions.OneCore.dll,ShellRefresh"}
+{"os": "windows", "chain": ["services", "svchost", "rundll32"], "cmdline": "rundll32.exe C:\\Windows\\system32\\PcaSvc.dll,PcaPatchSdbTask"}
+{"os": "windows", "chain": ["services", "svchost", "wmiprvse"], "cmdline": "C:\\WINDOWS\\system32\\wbem\\wmiprvse.exe -secured -Embedding"}
+{"os": "windows", "chain": ["wininit", "services", "sppsvc"], "cmdline": "C:\\WINDOWS\\system32\\sppsvc.exe"}
+{"os": "windows", "chain": ["services", "svchost", "runtimebroker"], "cmdline": "C:\\Windows\\System32\\RuntimeBroker.exe -Embedding"}
+{"os": "windows", "chain": ["services", "svchost", "mousocoreworker"], "cmdline": "\"C:\\WINDOWS\\uus\\AMD64\\MoUsoCoreWorker.exe\" useprivatenamespaces"}
+{"os": "windows", "chain": ["services", "svchost", "backgroundtaskhost"], "cmdline": "\"C:\\WINDOWS\\system32\\backgroundTaskHost.exe\" -ServerName:App.AppXpybpk6fj2fe0gb0jan49e6dncngk3pa1.mca"}
+{"os": "windows", "chain": ["services", "svchost", "tiworker"], "cmdline": "C:\\WINDOWS\\winsxs\\amd64_microsoft-windows-servicingstack_31bf3856ad364e35_10.0.26100.9703_none_a5009b9d7769c1f5\\TiWorker.exe -Embedding"}
+{"os": "windows", "chain": ["services", "svchost", "sdbinst"], "cmdline": "C:\\WINDOWS\\System32\\sdbinst.exe -m -bg"}
+{"os": "windows", "chain": ["services", "svchost", "consent"], "cmdline": "consent.exe 2796 790 00000269FE153B40"}
+{"os": "windows", "chain": ["services", "svchost", "audiodg"], "cmdline": "C:\\WINDOWS\\system32\\AUDIODG.EXE 0x0000000000000524 0x0000000000000560"}
+{"os": "windows", "chain": ["wininit", "services", "trustedinstaller"], "cmdline": "C:\\WINDOWS\\servicing\\TrustedInstaller.exe"}
+{"os": "windows", "chain": ["services", "searchindexer", "searchprotocolhost"], "cmdline": "\"C:\\WINDOWS\\System32\\SearchProtocolHost.exe\" Global\\UsGthrFltPipeMssGthrPipe36_ Global\\UsGthrCtrlFltPipeMssGthrPipe36 1 -2147483646 \"Software\\Microsoft\\Windows Search\" \"Mozilla/4.0 (compatible; MSIE 6.0; Windows NT; MS Search 4.0 Robot)\" \"C:\\ProgramData\\Microsoft\\Search\\Data\\Temp\\usgthrsvc\" \"DownLevelDaemon\""}
+{"os": "windows", "chain": ["services", "searchindexer", "searchfilterhost"], "cmdline": "\"C:\\WINDOWS\\System32\\SearchFilterHost.exe\" 920 3192 3640 904 {EEC97550-47A9-11CF-B952-00AA0051FE20}"}
+{"os": "windows", "chain": ["services", "svchost", "microsoftedgeupdate"], "cmdline": "\"C:\\Program Files (x86)\\Microsoft\\EdgeUpdate\\MicrosoftEdgeUpdate.exe\" /ua /installsource scheduler"}
+{"os": "windows", "chain": ["services", "svchost", "usoclient"], "cmdline": "C:\\Windows\\system32\\usoclient.exe StartScan"}
+{"os": "windows", "chain": ["services", "svchost", "compattelrunner"], "cmdline": "C:\\Windows\\system32\\compattelrunner.exe -m:appraiser.dll -f:DoScheduledTelemetryRun"}
+{"os": "windows", "chain": ["services", "svchost", "powershell"], "cmdline": "powershell.exe -ExecutionPolicy Bypass -NoProfile -File \"C:\\Program Files\\Dell\\SupportAssist\\scripts\\cleanup.ps1\""}
+{"os": "windows", "chain": ["services", "ccmexec", "powershell"], "cmdline": "powershell.exe -NoLogo -Noninteractive -NoProfile -ExecutionPolicy Bypass \"& 'C:\\WINDOWS\\CCM\\SystemTemp\\a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d.ps1'\""}
+{"os": "windows", "chain": ["services", "ccmexec", "cmd"], "cmdline": "C:\\WINDOWS\\system32\\cmd.exe /c \"C:\\WINDOWS\\ccmcache\\4\\install.cmd\""}
+{"os": "windows", "chain": ["services", "msmpeng", "mpcmdrun"], "cmdline": "\"C:\\ProgramData\\Microsoft\\Windows Defender\\Platform\\4.18.25090.3009-0\\MpCmdRun.exe\" SignatureUpdate -ScheduleJob -RestrictPrivileges"}
+{"os": "windows", "chain": ["services", "msiexec", "msiexec"], "cmdline": "C:\\Windows\\syswow64\\MsiExec.exe -Embedding 4F2A1B3C5D6E7F8091A2B3C4D5E6F708 C"}
+{"os": "windows", "chain": ["services", "msiexec", "msiexec", "cmd"], "cmdline": "C:\\Windows\\SysWOW64\\cmd.exe /c \"\"C:\\Program Files\\Vendor\\postinstall.bat\"\""}
+{"os": "windows", "chain": ["services", "w3wp"], "cmdline": "c:\\windows\\system32\\inetsrv\\w3wp.exe -ap \"DefaultAppPool\" -v \"v4.0\" -l \"webengine4.dll\" -a \\\\.\\pipe\\iisipm8b1e2c3d-4f5a-6b7c-8d9e-0f1a2b3c4d5e -h \"C:\\inetpub\\temp\\apppools\\DefaultAppPool\\DefaultAppPool.config\" -w \"\" -m 0"}
+{"os": "windows", "chain": ["services", "w3wp", "csc"], "cmdline": "\"C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe\" /noconfig /fullpaths @\"C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\Temporary ASP.NET Files\\root\\a1b2c3\\d4e5f6\\x1y2z3ab.cmdline\""}
+{"os": "windows", "chain": ["services", "w3wp", "csc", "cvtres"], "cmdline": "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\cvtres.exe /NOLOGO /READONLY /MACHINE:IX86 \"/OUT:C:\\Windows\\TEMP\\RES1A2B.tmp\" \"c:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\Temporary ASP.NET Files\\root\\a1b2c3\\d4e5f6\\CSC9F8E7D6C5B4A3.TMP\""}
+{"os": "windows", "chain": ["wininit", "services", "sqlservr"], "cmdline": "\"C:\\Program Files\\Microsoft SQL Server\\MSSQL16.MSSQLSERVER\\MSSQL\\Binn\\sqlservr.exe\" -sMSSQLSERVER"}
+{"os": "windows", "chain": ["winlogon", "userinit", "explorer"], "cmdline": "C:\\WINDOWS\\Explorer.EXE"}
+{"os": "windows", "chain": ["winlogon", "userinit", "wscript"], "cmdline": "C:\\Windows\\System32\\WScript.exe \"\\\\corp.local\\SysVol\\corp.local\\scripts\\logon.vbs\""}
+{"os": "windows", "chain": ["explorer", "snippingtool"], "cmdline": "\"C:\\Program Files\\WindowsApps\\Microsoft.ScreenSketch_11.2608.41.0_x64__8wekyb3d8bbwe\\SnippingTool\\SnippingTool.exe\" ms-screenclip:///?source=HotKey"}
+{"os": "windows", "chain": ["explorer", "taskmgr"], "cmdline": "\"C:\\WINDOWS\\system32\\taskmgr.exe\" /0"}
+{"os": "windows", "chain": ["explorer", "rundll32"], "cmdline": "\"C:\\Windows\\system32\\rundll32.exe\" shell32.dll,Control_RunDLL C:\\Windows\\System32\\desk.cpl,,0"}
+{"os": "windows", "chain": ["explorer", "onedrive"], "cmdline": "\"C:\\Users\\alice\\AppData\\Local\\Microsoft\\OneDrive\\OneDrive.exe\" /background"}
+{"os": "windows", "chain": ["explorer", "ms-teams"], "cmdline": "\"C:\\Program Files\\WindowsApps\\MSTeams_25290.205.4069.4894_x64__8wekyb3d8bbwe\\ms-teams.exe\" msteams:system-initiated"}
+{"os": "windows", "chain": ["explorer", "code"], "cmdline": "\"C:\\Users\\alice\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe\""}
+{"os": "windows", "chain": ["explorer", "code", "powershell"], "cmdline": "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoExit -Command \"& 'c:\\Users\\alice\\AppData\\Local\\Programs\\Microsoft VS Code\\resources\\app\\out\\vs\\workbench\\contrib\\terminal\\common\\scripts\\shellIntegration.ps1'\""}
+{"os": "windows", "chain": ["explorer", "code", "git"], "cmdline": "git.exe -c core.quotepath=false -c color.ui=false log --oneline -50"}
+{"os": "windows", "chain": ["explorer", "rustup-init"], "cmdline": "\"C:\\Users\\alice\\Downloads\\rustup-init.exe\""}
+{"os": "windows", "chain": ["explorer", "msiexec"], "cmdline": "\"C:\\Windows\\System32\\msiexec.exe\" /i \"C:\\Users\\alice\\Downloads\\node-v24.10.0-x64.msi\""}
+{"os": "windows", "chain": ["explorer", "cmd"], "cmdline": "C:\\WINDOWS\\system32\\cmd.exe /c \"\"C:\\Users\\alice\\Desktop\\build.bat\" \""}
+{"os": "windows", "chain": ["explorer", "winword"], "cmdline": "\"C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE\" /n \"C:\\Users\\alice\\Documents\\thesis_draft.docx\" /o \"\""}
+{"os": "windows", "chain": ["explorer", "excel"], "cmdline": "\"C:\\Program Files\\Microsoft Office\\root\\Office16\\EXCEL.EXE\" \"C:\\Users\\alice\\Documents\\results.xlsx\""}
+{"os": "windows", "chain": ["explorer", "outlook", "winword"], "cmdline": "\"C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE\" /n /f \"C:\\Users\\alice\\AppData\\Local\\Microsoft\\Windows\\INetCache\\Content.Outlook\\4KX2M1P9\\agenda.docx\""}
+{"os": "windows", "chain": ["explorer", "winword", "splwow64"], "cmdline": "C:\\WINDOWS\\splwow64.exe 12288"}
+{"os": "windows", "chain": ["explorer", "excel", "splwow64"], "cmdline": "C:\\WINDOWS\\splwow64.exe 8192"}
+{"os": "windows", "chain": ["explorer", "outlook", "msedge"], "cmdline": "\"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe\" --single-argument https://teams.microsoft.com/l/meetup-join/19%3ameeting_NjE2"}
+{"os": "windows", "chain": ["explorer", "chrome", "chrome"], "cmdline": "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --type=renderer --lang=en-US --renderer-client-id=7 --launch-time-ticks=123456789 --field-trial-handle=1960,i,111,222,262144 /prefetch:1"}
+{"os": "windows", "chain": ["explorer", "msedge", "msedge"], "cmdline": "\"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe\" --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=none --field-trial-handle=2216,i,1234567890,9876543210,262144 /prefetch:11"}
+{"os": "windows", "chain": ["explorer", "msedge", "identity_helper"], "cmdline": "\"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\156.0.4314.42\\identity_helper.exe\" --type=utility --utility-sub-type=winrt_app_id.mojom.WinrtAppIdService --lang=en-US --service-sandbox-type=none"}
+{"os": "windows", "chain": ["explorer", "acrobat"], "cmdline": "\"C:\\Program Files\\Adobe\\Acrobat DC\\Acrobat\\Acrobat.exe\" \"C:\\Users\\alice\\Downloads\\paper.pdf\""}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell"], "cmdline": "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "openconsole"], "cmdline": "\"C:\\Program Files\\WindowsApps\\Microsoft.WindowsTerminal_1.24.12741.0_x64__8wekyb3d8bbwe\\OpenConsole.exe\" --headless --textMeasurement graphemes --width 120 --height 30 --signal 0x96c --server 0x968"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "cmd", "conhost"], "cmdline": "\\??\\C:\\WINDOWS\\system32\\conhost.exe 0xffffffff -ForceV1"}
+{"os": "windows", "chain": ["explorer", "claude", "powershell"], "cmdline": "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -NoProfile -NonInteractive -NoLogo -EncodedCommand CgBmAHUAbgBjAHQAaQBvAG4AIABXAHIAaQB0AGUALQBTAG4AYQBwAHMAaABvAHQAIAB7AAoAIAAgACAAIABwAGEAcgBhAG0AKAA="}
+{"os": "windows", "chain": ["explorer", "claude", "cmd"], "cmdline": "C:\\WINDOWS\\System32\\cmd.exe /d /s /c \"\"C:\\WINDOWS\\System32\\chcp.com\" 65001 >nul & \"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$__claudeCodeScript = $env:CLAUDE_CODE_SCRIPT; iex $__claudeCodeScript\"\""}
+{"os": "windows", "chain": ["explorer", "claude", "cmd", "powershell"], "cmdline": "\"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"$__claudeCodeScript = $env:CLAUDE_CODE_SCRIPT; iex $__claudeCodeScript\""}
+{"os": "windows", "chain": ["explorer", "claude", "cmd", "chcp.com"], "cmdline": "\"C:\\WINDOWS\\System32\\chcp.com\" 65001"}
+{"os": "windows", "chain": ["explorer", "claude", "reg"], "cmdline": "C:\\WINDOWS\\System32\\reg.exe query HKLM\\SOFTWARE\\Policies\\ClaudeCode /v Settings"}
+{"os": "windows", "chain": ["explorer", "claude", "git"], "cmdline": "\"C:\\Program Files\\Git\\cmd\\git.exe\" -c core.quotepath=false status --porcelain"}
+{"os": "windows", "chain": ["explorer", "claude", "bash"], "cmdline": "\"C:\\Program Files\\Git\\bin\\bash.exe\" -c \"source /c/Users/alice/.claude/shell-snapshots/snapshot-bash-1792915566890-6h54d2.sh 2>/dev/null || true && eval 'git status' < /dev/null\""}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "ipconfig"], "cmdline": "ipconfig /all"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "whoami"], "cmdline": "\"C:\\WINDOWS\\system32\\whoami.exe\" /groups"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "systeminfo"], "cmdline": "systeminfo"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "tasklist"], "cmdline": "tasklist /v /fo csv"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "hostname"], "cmdline": "hostname"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "net"], "cmdline": "net user"}
+{"os": "windows", "chain": ["explorer", "cmd", "net"], "cmdline": "net use Z: \\\\fileserver01\\projects /persistent:yes"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "nltest"], "cmdline": "nltest /dsgetdc:corp.local"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "certutil"], "cmdline": "certutil -hashfile C:\\Users\\alice\\Downloads\\rustup-init.exe SHA256"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "curl"], "cmdline": "curl.exe -LO https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-pc-windows-msvc.zip"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "winget"], "cmdline": "winget install --id astral-sh.uv -e"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "powershell"], "cmdline": "powershell -ExecutionPolicy Bypass -File .\\scripts\\install.ps1"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "powershell"], "cmdline": "powershell -NoProfile -Command \"Invoke-WebRequest -Uri https://aka.ms/vs/17/release/vs_BuildTools.exe -OutFile vs_BuildTools.exe\""}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "powershell"], "cmdline": "powershell -NoProfile -Command \"Get-ChildItem -Recurse -Filter *.log | Remove-Item\""}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "powershell"], "cmdline": "powershell -Command Add-MpPreference -ExclusionPath C:\\Users\\alice\\Projects\\thesis\\app\\target"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "schtasks"], "cmdline": "schtasks /query /fo LIST /v"}
+{"os": "windows", "chain": ["explorer", "cmd", "schtasks"], "cmdline": "schtasks /create /tn \"Nightly Backup\" /tr \"C:\\Tools\\backup.cmd\" /sc daily /st 02:00 /ru SYSTEM"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "reg"], "cmdline": "reg query \"HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\" /s"}
+{"os": "windows", "chain": ["explorer", "cmd", "reg"], "cmdline": "reg add HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced /v HideFileExt /t REG_DWORD /d 0 /f"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "sc"], "cmdline": "sc query wuauserv"}
+{"os": "windows", "chain": ["explorer", "cmd", "vssadmin"], "cmdline": "vssadmin list shadows"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "wevtutil"], "cmdline": "wevtutil qe System /c:20 /rd:true /f:text"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "netsh"], "cmdline": "netsh wlan show profiles"}
+{"os": "windows", "chain": ["explorer", "cmd", "netsh"], "cmdline": "netsh advfirewall firewall add rule name=\"Dev server 8080\" dir=in action=allow protocol=TCP localport=8080"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "icacls"], "cmdline": "icacls C:\\Projects\\shared /grant \"CORP\\devs:(OI)(CI)M\""}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "robocopy"], "cmdline": "robocopy C:\\Users\\alice\\Documents \\\\nas01\\backup\\alice /MIR /R:2 /W:5"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "python"], "cmdline": "python -m pip install -r requirements.txt"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "cargo"], "cmdline": "cargo build --release"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "uv"], "cmdline": "uv run python -m lotl.train"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "node"], "cmdline": "\"C:\\Program Files\\nodejs\\node.exe\" \"C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js\" install"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "git"], "cmdline": "\"C:\\Program Files\\Git\\cmd\\git.exe\" push origin main"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "ssh"], "cmdline": "\"C:\\Windows\\System32\\OpenSSH\\ssh.exe\" alice@192.168.1.20"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "docker"], "cmdline": "docker compose up -d"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "kubectl"], "cmdline": "kubectl get pods -A"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "cmd"], "cmdline": "\"C:\\WINDOWS\\system32\\cmd.exe\" /c ver"}
+{"os": "windows", "chain": ["explorer", "cmd", "findstr"], "cmdline": "findstr /s /i \"TODO\" *.rs"}
+{"os": "windows", "chain": ["explorer", "cmd", "attrib"], "cmdline": "attrib -r C:\\Projects\\thesis\\README.md"}
+{"os": "windows", "chain": ["explorer", "cmd", "wmic"], "cmdline": "wmic os get Caption,Version,BuildNumber"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "taskkill"], "cmdline": "taskkill /F /IM node.exe"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "msiexec"], "cmdline": "msiexec /i C:\\Users\\alice\\Downloads\\Git-2.51.0-64-bit.msi /qn"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "bcdedit"], "cmdline": "bcdedit /enum"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "wbadmin"], "cmdline": "wbadmin get versions"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "procdump64"], "cmdline": "procdump64.exe -accepteula -ma 15320 C:\\dumps\\app.dmp"}
+{"os": "windows", "chain": ["explorer", "windowsterminal", "powershell", "takeown"], "cmdline": "takeown /f C:\\OldDrive\\Users /r /d y"}
+{"os": "windows", "chain": ["explorer", "cmd", "sc"], "cmdline": "sc stop Spooler"}
+{"os": "windows", "chain": ["explorer", "cmd", "certutil"], "cmdline": "certutil -store -user My"}

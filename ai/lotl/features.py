@@ -22,7 +22,7 @@ CONTENT_APPS = {
     "firefox", "firefox-esr", "chrome", "chromium", "google-chrome", "brave", "msedge", "opera",
     "vivaldi-bin", "epiphany", "soffice.bin", "libreoffice", "evince", "okular", "zathura",
     "thunderbird", "evolution", "winword", "excel", "powerpnt", "outlook", "msaccess", "onenote",
-    "acrord32", "acrobat", "foxitreader", "iexplore",
+    "acrord32", "acrobat", "foxitreader", "iexplore", "mspub", "visio", "wordpad", "olk", "ms-teams",
 }
 INTERPRETERS = {
     "sh", "bash", "dash", "zsh", "fish", "ksh", "csh", "tcsh", "busybox", "pwsh", "python", "perl",
@@ -33,7 +33,8 @@ TOOLS = {"curl", "wget", "nc", "ncat", "netcat", "socat", "base64", "openssl", "
 # Network-facing daemons: a shell under one of these is the classic web-shell / RCE chain.
 SERVERS = {
     "nginx", "apache2", "httpd", "php-fpm", "lighttpd", "java", "tomcat", "gunicorn", "uwsgi",
-    "postgres", "mysqld", "redis-server", "sshd", "vsftpd", "smbd", "w3wp", "sqlservr",
+    "postgres", "mysqld", "redis-server", "sshd", "vsftpd", "smbd", "w3wp", "sqlservr", "php-cgi",
+    "umworkerprocess", "wmiprvse",
 }
 # Recon, privilege, persistence and staging binaries common in GTFOBins/LOLBAS chains.
 LOTL_BINS = {
@@ -44,6 +45,11 @@ LOTL_BINS = {
     "gcc", "cc", "make", "vim", "vi", "less", "more", "env", "xargs", "tee", "cat", "grep", "sed",
     "cut", "getent", "nmap", "docker", "kubectl", "gdb", "strace", "tcpdump", "at", "ldd",
     "schtasks", "wmic", "vssadmin", "bcdedit", "wevtutil", "reg", "net", "netsh", "sc", "msiexec",
+    # LOLBAS (Windows): recon, execution proxies, credential access, persistence, staging.
+    "net1", "ipconfig", "systeminfo", "tasklist", "taskkill", "nltest", "quser", "qwinsta", "arp", "route",
+    "cmstp", "msbuild", "installutil", "regasm", "regsvcs", "odbcconf", "forfiles", "pcalua", "msdt", "hh",
+    "mavinject", "procdump", "esentutl", "ntdsutil", "diskshadow", "wbadmin", "expand", "extrac32",
+    "findstr", "attrib", "icacls", "takeown", "cipher", "makecab", "certreq", "sdbinst",
 }
 KNOWN = CONTENT_APPS | INTERPRETERS | TOOLS | SERVERS | LOTL_BINS
 CLASSES = (("CONTENT", CONTENT_APPS), ("INTERP", INTERPRETERS), ("TOOL", TOOLS), ("SERVER", SERVERS))
@@ -55,11 +61,14 @@ PATHS = {
     "/etc/systemd/": "SYSTEMD", "/.config/systemd/": "SYSTEMD", ".bashrc": "RC", ".profile": "RC",
     "/etc/rc.local": "RC", "ld.so.preload": "PRELOAD", "/proc/self/": "PROC_SELF", "/var/log": "VAR_LOG",
     "/var/www": "WEBROOT", "/bin/sh": "BIN_SH", "/bin/bash": "BIN_BASH", "\\appdata\\": "APPDATA",
-    "\\temp\\": "TMP", "\\users\\public\\": "PUBLIC",
+    "\\temp\\": "TMP", "\\users\\public\\": "PUBLIC", "\\programdata\\": "PROGRAMDATA", "\\perflogs\\": "PERFLOGS",
+    "\\start menu\\programs\\startup": "STARTUP", "\\currentversion\\run": "RUN_KEY", "\\windows\\tasks\\": "TASKS",
+    "lsass": "LSASS", "ntds.dit": "NTDS", "hklm\\sam": "SAM_HIVE", "\\$recycle.bin\\": "RECYCLE",
 }
 LONG_PARAMS = {
     "--decode", "--output", "--post-file", "--upload-file", "-exec", "-enc", "-encodedcommand",
     "-nop", "-noprofile", "-windowstyle", "-executionpolicy", "--no-check-certificate", "-urlcache",
+    "-noninteractive", "-command", "-file", "/transfer", "/create", "/add", "/c", "/q", "/s",
 }
 
 # Rule fragments mirrored from chains.rs CMDLINE_RULES (whole-word matched on the normalized line).
@@ -82,6 +91,10 @@ CMDLINE_RULES = (
     ("journalctl --vacuum", "delete_logs"), ("setenforce 0", "disable_selinux"), ("auditctl -d", "delete_audit_rules"),
     ("auditctl -e 0", "disable_audit"), ("stop auditd", "stop_audit"), ("iptables -f", "flush_firewall"),
     ("ufw disable", "disable_firewall"), ("ld_preload=", "preload_hijack"), ("ld.so.preload", "preload_hijack"),
+    ("minidump", "credential_dump"), ("sekurlsa", "credential_dump"), ("reg save hklm\\sam", "credential_dump"),
+    ("reg save hklm\\security", "credential_dump"), ("add-mppreference -exclusionpath", "defender_exclusion"),
+    ("recoveryenabled no", "disable_recovery"), ("wbadmin delete catalog", "delete_backup"),
+    ("schtasks /create", "schtask_create"), ("process call create", "wmi_exec"),
 )
 # Paper §3.2 regexes: interpreter one-liners that open sockets or spawn shells.
 PATTERNS = {
@@ -97,6 +110,12 @@ PATTERNS = {
     "find_exec_shell": r"find\s.*-exec\s+(/bin/)?(ba)?sh", "tar_checkpoint": r"--checkpoint-action=exec",
     "vi_shell": r"vim?\s.*-c\s*['\"]?:?!", "env_shell": r"env\s+(/bin/)?(ba)?sh\b", "nohup_bg": r"nohup\s.*&\s*$",
     "shell_c_long": r"\b(ba)?sh\s+-c\s+\S.{120,}",
+    # Windows (LOLBAS): execution proxies fetching or running script content, payloads dropped in writable dirs.
+    "mshta_script": r"mshta(\.exe)?\"?\s+\S*(https?:|javascript:|vbscript:)", "rundll32_script": r"rundll32.*(javascript:|mshtml)",
+    "regsvr32_remote": r"regsvr32.*/i:\S*(https?:|scrobj)", "encoded_long": r"\s-e(nc(odedcommand)?)?\s+[a-z0-9+/=]{40,}",
+    "drop_and_run": r"\\(appdata|temp|users\\public|programdata)\\[^\\\s\"]+\.(exe|dll|ps1|vbs|js|hta|bat|scr)\b",
+    "script_file_exec": r"[wc]script(\.exe)?\"?\s+.*\.(vbs|js|jse|vbe|wsf)\b",
+    "net_user_add": r"net1?(\.exe)?\s+(user\s+\S+\s+\S+\s+/add|localgroup\s+administrators\s+\S+\s+/add)",
 }
 _PATTERNS = {k: re.compile(v, re.IGNORECASE) for k, v in PATTERNS.items()}
 _IPV4 = re.compile(r"(?<![\d.])(\d{1,3}(?:\.\d{1,3}){3})(?![\d.])")
